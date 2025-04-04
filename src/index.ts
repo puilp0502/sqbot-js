@@ -17,9 +17,10 @@ import {
   TextChannel,
 } from "discord.js";
 import { MusicQuizDatastore, QuizPack, QuizEntry } from "./types/quiz";
-import ytdl from "ytdl-core";
 import dotenv from "dotenv";
 import { MusicQuizSQLiteDatastore } from "./types/sqlite-datastore";
+import { YtDlp } from "ytdlp-nodejs";
+import { createStreamBridge } from "./utils";
 
 // Load environment variables
 dotenv.config();
@@ -53,6 +54,12 @@ const gameStates = new Map<string, GameState>();
 const datastore: MusicQuizDatastore = new MusicQuizSQLiteDatastore(
   "./sample.sqlite3"
 );
+
+// Initialize YTDLP provider
+const ytDlp = new YtDlp({
+  // TODO: figure out why autodetection is not working
+  binaryPath: "/Users/frank/.local/bin/yt-dlp",
+});
 
 client.once("ready", () => {
   console.log(`Bot is online as ${client.user?.tag}!`);
@@ -105,7 +112,12 @@ async function startQuiz(message: Message, packNameExploded: string[]) {
   // Announce quiz start
   if (message.channel instanceof TextChannel) {
     message.channel.send(
-      `🎮 Starting quiz with pack: **${pack.name}**\n\n**Rules:**\n- Listen to the song clip\n- Type the song name or artist in the chat\n- First correct answer gets a point\n- After all rounds, the player with the most points wins!`
+      `🎮 Starting quiz with pack: **${pack.name}**\n
+**Rules:**
+- Listen to the song clip
+- Type the song name in the chat
+- First correct answer gets a point
+- After all rounds, the player with the most points wins!`
     );
   }
 
@@ -127,21 +139,40 @@ async function playNextRound(guildId: string) {
   gameState.currentEntry = entry;
 
   // Create YouTube stream
-  const stream = ytdl(`https://www.youtube.com/watch?v=${entry.ytVideoId}`, {
-    filter: "audioonly",
-    begin: entry.songStart * 1000, // Convert to milliseconds
-  });
 
-  const resource = createAudioResource(stream);
+  const sectionSpec = (() => {
+    let sectionStart = entry.songStart || 0;
+    let sectionEnd = entry.playDuration
+      ? `${sectionStart + entry.playDuration}`
+      : "";
+    return `*${sectionStart}-${sectionEnd}`;
+  })();
+
+  const ytdlpStream = ytDlp.stream(
+    `https://www.youtube.com/watch?v=${entry.ytVideoId}`,
+    {
+      format: "bestaudio",
+      downloadSections: sectionSpec,
+      postprocessorArgs: {
+        af: ["volume=0.5"],
+      },
+    }
+  );
+  const duplexStream = createStreamBridge();
+  ytdlpStream.pipe(duplexStream);
+
+  const resource = createAudioResource(duplexStream);
   const player = players.get(guildId);
 
   if (player) {
     player.play(resource);
 
     // Stop playing after duration
-    setTimeout(() => {
-      player.stop();
-    }, entry.playDuration * 1000);
+    if (entry.playDuration > 0) {
+      setTimeout(() => {
+        player.stop();
+      }, entry.playDuration * 1000);
+    }
   }
 
   if (gameState.textChannel) {
@@ -287,11 +318,23 @@ client.on("messageCreate", async (message: Message) => {
   if (!gameState?.isActive || !gameState.currentEntry) return;
 
   const answer = message.content.toLowerCase();
-  const correctAnswers = gameState.currentEntry.possibleAnswers.map((a) =>
-    a.toLowerCase()
-  );
+  const entry = gameState.currentEntry;
+  let correctAnswers = [
+    entry.canonicalName,
+    ...gameState.currentEntry.possibleAnswers,
+  ];
+  // Generate possible acceptable answers
+  let expandedAnswerSet = correctAnswers.reduce((acc, x) => {
+    let lowercase = x.toLowerCase();
+    let withoutSpacing = x.replace(" ", "");
+    acc.add(lowercase);
+    acc.add(withoutSpacing);
+    acc.add(withoutSpacing.toLowerCase());
+    acc.add(x);
+    return acc;
+  }, new Set());
 
-  if (correctAnswers.includes(answer)) {
+  if (expandedAnswerSet.has(answer)) {
     // Update score
     const currentScore = gameState.scores.get(message.author.id) || 0;
     gameState.scores.set(message.author.id, currentScore + 1);
