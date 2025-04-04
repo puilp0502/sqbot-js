@@ -168,12 +168,12 @@ async function playNextRound(guildId: string) {
   if (player) {
     player.play(resource);
 
+    const playDuration = entry.playDuration > 0 ? entry.playDuration : Infinity;
     // Stop playing after duration
-    if (entry.playDuration > 0) {
-      setTimeout(() => {
-        player.stop();
-      }, entry.playDuration * 1000);
-    }
+    setTimeout(
+      () => advanceWithoutWinning(guildId, "Timeout exceeded"),
+      Math.min(playDuration * 1000, 60000) // Cap max playtime at 60 seconds
+    );
   }
 
   if (gameState.textChannel) {
@@ -183,6 +183,32 @@ async function playNextRound(guildId: string) {
       } - Start guessing!`
     );
   }
+}
+
+function advanceWithoutWinning(guildId: string, reason: string) {
+  const gameState = gameStates.get(guildId);
+  if (!gameState || !gameState.currentPack) return;
+
+  const player = players.get(guildId);
+  if (player) {
+    player.stop();
+  }
+
+  let answerText = "";
+  if (gameState.currentEntry) {
+    answerText = `\nThe answer was "${gameState.currentEntry.canonicalName}" by ${gameState.currentEntry.performer}`;
+  }
+  let teaser = "";
+  if (gameState.currentRound + 1 < gameState.currentPack.entries.length) {
+    teaser = "\n\nThe next song will play shortly!";
+  }
+  gameState.textChannel?.send(`➡️ ${reason}!${answerText}${teaser}`);
+
+  // Move to next round
+  gameState.currentRound++;
+
+  // Wait a moment before starting the next round
+  setTimeout(() => playNextRound(guildId), 3000);
 }
 
 function endQuiz(guildId: string) {
