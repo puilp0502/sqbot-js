@@ -48,14 +48,14 @@ describe("MusicQuizSQLiteDatastore", () => {
       -- Insert test quiz packs
       INSERT INTO quiz_packs (id, name, description, created_at, updated_at)
       VALUES 
-        ('pack1', 'Rock Classics', 'Classic rock songs', '2024-01-01T00:00:00.000Z', '2024-01-01T00:00:00.000Z'),
+        ('pack1', 'VTuber Hits', 'VTuber Hit Songs', '2024-01-01T00:00:00.000Z', '2024-01-01T00:00:00.000Z'),
         ('pack2', 'Empty Pack', 'No entries', '2024-01-02T00:00:00.000Z', '2024-01-02T00:00:00.000Z');
 
       -- Insert test quiz entries
       INSERT INTO quiz_entries (id, quiz_pack_id, performer, canonical_name, yt_video_id, song_start, play_duration, possible_answers)
       VALUES 
-        ('entry1', 'pack1', 'Led Zeppelin', 'Stairway to Heaven', 'video1', 30, 20, '["Stairway to Heaven", "Highway to Hell", "Smoke on the Water"]'),
-        ('entry2', 'pack1', 'Deep Purple', 'Smoke on the Water', 'video2', 0, 30, '["Smoke on the Water", "Purple Rain", "Black Smoke Rising"]');
+        ('1', 'pack1', '코보 카나에루', 'HELP!!', 'z2tDtdHHAHg', 0, -1, '["help", "헬프"]'),
+        ('2', 'pack1', '호시마치 스이세이', 'Stellar Stellar', 'a51VH9BYzZA', 0, -1, '["스텔라스텔라"]');
     `;
 
     return new Promise((resolve, reject) => {
@@ -76,18 +76,18 @@ describe("MusicQuizSQLiteDatastore", () => {
       const result = await datastore.getQuizPack("pack1");
       expect(result).toMatchObject({
         id: "pack1",
-        name: "Rock Classics",
-        description: "Classic rock songs",
+        name: "VTuber Hits",
+        description: "VTuber Hit Songs",
         entries: expect.arrayContaining([
           expect.objectContaining({
-            id: "entry1",
-            performer: "Led Zeppelin",
-            canonicalName: "Stairway to Heaven",
+            id: "1",
+            performer: "코보 카나에루",
+            canonicalName: "HELP!!",
           }),
           expect.objectContaining({
-            id: "entry2",
-            performer: "Deep Purple",
-            canonicalName: "Smoke on the Water",
+            id: "2",
+            performer: "호시마치 스이세이",
+            canonicalName: "Stellar Stellar",
           }),
         ]),
       });
@@ -129,11 +129,7 @@ describe("MusicQuizSQLiteDatastore", () => {
       expect(pack?.updatedAt).toBeInstanceOf(Date);
 
       // Verify JSON parsing of possible answers
-      expect(pack?.entries[0].possibleAnswers).toEqual([
-        "Stairway to Heaven",
-        "Highway to Hell",
-        "Smoke on the Water",
-      ]);
+      expect(pack?.entries[0].possibleAnswers).toEqual(["help", "헬프"]);
     });
   });
 });
