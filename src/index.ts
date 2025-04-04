@@ -155,7 +155,7 @@ async function playNextRound(guildId: string) {
       format: "bestaudio",
       downloadSections: sectionSpec,
       postprocessorArgs: {
-        af: ["volume=0.5"],
+        af: ["loudnorm"],
       },
     }
   );
