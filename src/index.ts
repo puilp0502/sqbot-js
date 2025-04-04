@@ -142,9 +142,10 @@ async function playNextRound(guildId: string) {
 
   const sectionSpec = (() => {
     let sectionStart = entry.songStart || 0;
-    let sectionEnd = entry.playDuration
-      ? `${sectionStart + entry.playDuration}`
-      : "";
+    let sectionEnd = "";
+    if (entry.playDuration > 0) {
+      sectionEnd = `${sectionStart + entry.playDuration}`;
+    }
     return `*${sectionStart}-${sectionEnd}`;
   })();
 
