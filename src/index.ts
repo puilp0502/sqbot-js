@@ -112,12 +112,12 @@ async function startQuiz(message: Message, packNameExploded: string[]) {
   // Announce quiz start
   if (message.channel instanceof TextChannel) {
     message.channel.send(
-      `🎮 Starting quiz with pack: **${pack.name}**\n
-**Rules:**
-- Listen to the song clip
-- Type the song name in the chat
-- First correct answer gets a point
-- After all rounds, the player with the most points wins!`
+      `🎮 **${pack.name}** 플레이리스트로 게임을 시작합니다!\n
+**규칙:**
+- 재생되는 노래를 잘 들어주세요.
+- 채팅으로 노래 제목을 맞취주세요.
+- 첫번째로 정답을 맞춘 사람이 점수를 획득합니다.
+- 가장 많은 점수를 획득한 플레이어가 승리합니다!`
     );
   }
 
@@ -171,16 +171,16 @@ async function playNextRound(guildId: string) {
     const playDuration = entry.playDuration > 0 ? entry.playDuration : Infinity;
     // Stop playing after duration
     setTimeout(
-      () => advanceWithoutWinning(guildId, "Timeout exceeded"),
+      () => advanceWithoutWinning(guildId, "시간 초과"),
       Math.min(playDuration * 1000, 60000) // Cap max playtime at 60 seconds
     );
   }
 
   if (gameState.textChannel) {
     gameState.textChannel.send(
-      `🎵 Round ${gameState.currentRound + 1}/${
+      `🎵 문제 ${gameState.currentRound + 1}/${
         gameState.currentPack.entries.length
-      } - Start guessing!`
+      }`
     );
   }
 }
@@ -196,11 +196,11 @@ function advanceWithoutWinning(guildId: string, reason: string) {
 
   let answerText = "";
   if (gameState.currentEntry) {
-    answerText = `\nThe answer was "${gameState.currentEntry.canonicalName}" by ${gameState.currentEntry.performer}`;
+    answerText = `\n정답은: ${gameState.currentEntry.performer} - "${gameState.currentEntry.canonicalName}"`;
   }
   let teaser = "";
   if (gameState.currentRound + 1 < gameState.currentPack.entries.length) {
-    teaser = "\n\nThe next song will play shortly!";
+    teaser = "\n\n다음 노래가 곧 재생됩니다!";
   }
   gameState.textChannel?.send(`➡️ ${reason}!${answerText}${teaser}`);
 
@@ -216,13 +216,13 @@ function endQuiz(guildId: string) {
   if (!gameState) return;
 
   // Display final scores
-  let scoreMessage = "🏆 Final Scores:\n";
+  let scoreMessage = "🏆 최종 점수:\n";
   const sortedScores = [...gameState.scores.entries()].sort(
     ([, a], [, b]) => b - a
   );
 
   if (sortedScores.length === 0) {
-    scoreMessage += "No one scored any points!";
+    scoreMessage += "아무도 점수를 획득하지 못했습니다!";
   } else {
     sortedScores.forEach(([userId, score], index) => {
       scoreMessage += `${index + 1}. <@${userId}>: ${score} points\n`;
@@ -255,12 +255,12 @@ client.on("messageCreate", async (message: Message) => {
     case "start":
       if (!message.member?.voice.channel) {
         return message.reply(
-          "You need to be in a voice channel to start a quiz!"
+          "음성 채널에 들어가 있어야 게임을 시작할 수 있습니다!"
         );
       }
 
       if (!args[0]) {
-        return message.reply("Please specify a quiz pack name!");
+        return message.reply("플레이리스트 이름을 지정해주세요!");
       }
 
       await startQuiz(message, args.slice(0));
@@ -269,25 +269,25 @@ client.on("messageCreate", async (message: Message) => {
     case "stop":
       if (gameStates.has(guildId)) {
         endQuiz(guildId);
-        message.reply("Quiz stopped!");
+        message.reply("게임 종료됨!");
       } else {
-        message.reply("No active quiz to stop!");
+        message.reply("현재 진행중인 게임이 없습니다!");
       }
       break;
 
     case "scores":
       const gameState = gameStates.get(guildId);
       if (!gameState || !gameState.isActive) {
-        return message.reply("No active quiz!");
+        return message.reply("현재 진행중인 게임이 없습니다!");
       }
 
-      let scoreMessage = "Current Scores:\n";
+      let scoreMessage = "현재 점수:\n";
       const sortedScores = [...gameState.scores.entries()].sort(
         ([, a], [, b]) => b - a
       );
 
       if (sortedScores.length === 0) {
-        scoreMessage += "No one has scored yet!";
+        scoreMessage += "아직 점수를 획득한 사람이 없습니다!";
       } else {
         sortedScores.forEach(([userId, score]) => {
           scoreMessage += `<@${userId}>: ${score} points\n`;
@@ -302,25 +302,25 @@ client.on("messageCreate", async (message: Message) => {
     case "list":
       const packs = await datastore.listQuizPacks();
       if (packs.length === 0) {
-        return message.reply("No quiz packs available!");
+        return message.reply("사용 가능한 플레이리스트가 없습니다!");
       }
 
       const packList = packs
         .map((pack: QuizPack) => `- **${pack.name}**: ${pack.description}`)
         .join("\n");
       if (message.channel instanceof TextChannel) {
-        message.channel.send(`Available quiz packs:\n${packList}`);
+        message.channel.send(`사용 가능한 플레이리스트:\n${packList}`);
       }
       break;
 
     case "help":
       const helpMessage = `
-**Music Quiz Bot Commands:**
-\`!quiz start [pack_name]\` - Start a new quiz with the specified pack
-\`!quiz stop\` - End the current quiz session
-\`!quiz scores\` - Show current scores
-\`!quiz list\` - List available quiz packs
-\`!quiz help\` - Show this help message
+**SQBot 명령어:**
+\`!quiz start [플레이리스트 명 또는 ID]\` - 지정된 플레이리스트를 가지고 새 게임을 시작합니다.
+\`!quiz stop\` - 현재 진행중인 게임을 중단합니다.
+\`!quiz scores\` - 현재 게임의 점수판을 표시합니다.
+\`!quiz list\` - 사용 가능한 플레이리스트를 표시합니다.
+\`!quiz help\` - 이 도움말을 표시합니다.
       `;
       if (message.channel instanceof TextChannel) {
         message.channel.send(helpMessage);
@@ -369,7 +369,7 @@ client.on("messageCreate", async (message: Message) => {
     // Announce correct answer
     if (message.channel instanceof TextChannel) {
       message.channel.send(
-        `🎉 ${message.author} got it right! The song was "${gameState.currentEntry.canonicalName}" by ${gameState.currentEntry.performer}`
+        `🎉 ${message.author}님이 정답을 맞췄습니다! 정답은 ${gameState.currentEntry.performer} - "${gameState.currentEntry.canonicalName}"였습니다!`
       );
     }
 
