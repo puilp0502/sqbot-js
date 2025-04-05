@@ -1,4 +1,4 @@
-import { MusicQuizSQLiteDatastore } from "../sqlite-datastore";
+import { MusicQuizSQLiteDatastore } from "../sqlite";
 import { Database } from "sqlite3";
 
 describe("MusicQuizSQLiteDatastore", () => {

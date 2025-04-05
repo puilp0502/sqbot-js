@@ -1,5 +1,5 @@
 import { Database } from "sqlite3";
-import { QuizEntry, QuizPack, MusicQuizDatastore } from "./quiz";
+import { QuizEntry, QuizPack, MusicQuizDatastore } from "../types/quiz";
 
 export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
   #db: Database;
