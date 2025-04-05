@@ -16,11 +16,11 @@ import {
   VoiceState,
   TextChannel,
 } from "discord.js";
-import { MusicQuizDatastore, QuizPack, QuizEntry } from "./types/quiz";
+import { MusicQuizDatastore, QuizPack, QuizEntry } from "../types/quiz";
 import dotenv from "dotenv";
-import { MusicQuizSQLiteDatastore } from "./types/sqlite-datastore";
+import { MusicQuizSQLiteDatastore } from "../types/sqlite-datastore";
 import { YtDlp } from "ytdlp-nodejs";
-import { createStreamBridge } from "./utils";
+import { createStreamBridge } from "../utils";
 
 // Load environment variables
 dotenv.config();
