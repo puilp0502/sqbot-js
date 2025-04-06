@@ -1,4 +1,4 @@
-import React, { UIEvent, useEffect, useState } from "react";
+import React, { UIEvent, useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,41 @@ async function updateQuizPack(packId: string, pack: QuizPack): Promise<void> {
     }
 }
 
+// Custom debounce hook
+function useDebounce<T extends (...args: any[]) => any>(
+    callback: T,
+    delay: number,
+): T {
+    const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
+    const debouncedCallback = useCallback(
+        (...args: Parameters<T>) => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+
+            setTimeoutId(
+                setTimeout(() => {
+                    callback(...args);
+                    setTimeoutId(null);
+                }, delay),
+            );
+        },
+        [callback, delay],
+    ) as T;
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+        };
+    }, [timeoutId]);
+
+    return debouncedCallback;
+}
+
 const SQBotEditor = () => {
     const [quizPack, setQuizPack] = useState<QuizPack>({
         id: "green-wumpus-touch-grass", // Default ID
@@ -63,6 +98,22 @@ const SQBotEditor = () => {
     const [currentEntry, setCurrentEntry] = useState<QuizEntry | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Create a debounced save function
+    const debouncedSave = useDebounce(async (packToSave: QuizPack) => {
+        try {
+            setIsSaving(true);
+            await updateQuizPack(packToSave.id, packToSave);
+            setError(null);
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to save changes",
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    }, 5000); // 5 second delay
 
     // Load quiz pack data on mount
     useEffect(() => {
@@ -91,33 +142,6 @@ const SQBotEditor = () => {
         loadQuizPack();
     }, []);
 
-    // Save changes to the server
-    const saveChanges = async () => {
-        try {
-            await updateQuizPack(quizPack.id, {
-                ...quizPack,
-                updatedAt: new Date(),
-            });
-        } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to save changes",
-            );
-        }
-    };
-
-    // Format and parse time functions remain the same
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, "0")}`;
-    };
-
-    const parseTime = (timeStr: string) => {
-        if (!timeStr.includes(":")) return 0;
-        const [mins, secs] = timeStr.split(":").map((num) => parseInt(num, 10));
-        return mins * 60 + secs;
-    };
-
     // Handle form input changes
     const handleChange = (field: string, value: any) => {
         if (!currentEntry) return;
@@ -129,14 +153,16 @@ const SQBotEditor = () => {
         const updatedEntries = [...quizPack.entries];
         updatedEntries[selectedEntryIndex] = updatedEntry;
 
-        setQuizPack((prev) => ({
-            ...prev,
+        const updatedPack = {
+            ...quizPack,
             entries: updatedEntries,
             updatedAt: new Date(),
-        }));
+        };
 
-        // Autosave changes
-        saveChanges();
+        setQuizPack(updatedPack);
+
+        // Trigger debounced save
+        debouncedSave(updatedPack);
     };
 
     const handleVideoIdChange = (value: string) => {
@@ -198,28 +224,32 @@ const SQBotEditor = () => {
             playDuration: 50,
         };
 
-        setQuizPack((prev) => ({
-            ...prev,
-            entries: [...prev.entries, newEntry],
+        const updatedPack = {
+            ...quizPack,
+            entries: [...quizPack.entries, newEntry],
             updatedAt: new Date(),
-        }));
+        };
+
+        setQuizPack(updatedPack);
         setSelectedEntryIndex(quizPack.entries.length);
         setCurrentEntry(newEntry);
 
-        // Save the new entry
-        saveChanges();
+        // Trigger debounced save
+        debouncedSave(updatedPack);
     };
 
     // Delete an entry
-    const deleteEntry = async (index: number, e: UIEvent) => {
+    const deleteEntry = (index: number, e: UIEvent) => {
         e.stopPropagation();
 
         const updatedEntries = quizPack.entries.filter((_, i) => i !== index);
-        setQuizPack((prev) => ({
-            ...prev,
+        const updatedPack = {
+            ...quizPack,
             entries: updatedEntries,
             updatedAt: new Date(),
-        }));
+        };
+
+        setQuizPack(updatedPack);
 
         if (selectedEntryIndex >= index) {
             const newSelectedIndex = Math.max(0, selectedEntryIndex - 1);
@@ -227,8 +257,21 @@ const SQBotEditor = () => {
             setCurrentEntry(updatedEntries[newSelectedIndex] || null);
         }
 
-        // Save the changes
-        await saveChanges();
+        // Trigger debounced save
+        debouncedSave(updatedPack);
+    };
+
+    // Format and parse time functions remain the same
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, "0")}`;
+    };
+
+    const parseTime = (timeStr: string) => {
+        if (!timeStr.includes(":")) return 0;
+        const [mins, secs] = timeStr.split(":").map((num) => parseInt(num, 10));
+        return mins * 60 + secs;
     };
 
     return (
@@ -242,12 +285,29 @@ const SQBotEditor = () => {
                     <div className="flex items-center">
                         <Input
                             className="w-64 mr-2 font-medium"
-                            value="봇치 더 락! OST 전곡"
-                            onChange={(e) =>
-                                console.log("Title changed:", e.target.value)}
+                            value={quizPack.name}
+                            onChange={(e) => {
+                                const updatedPack = {
+                                    ...quizPack,
+                                    name: e.target.value,
+                                    updatedAt: new Date(),
+                                };
+                                setQuizPack(updatedPack);
+                                debouncedSave(updatedPack);
+                            }}
                         />
                         <span className="text-gray-500">
-                            Playlist ID: green-wumpus-touch-grass
+                            Playlist ID: {quizPack.id}
+                            {isSaving && (
+                                <span className="ml-2 text-blue-500">
+                                    저장 중...
+                                </span>
+                            )}
+                            {error && (
+                                <span className="ml-2 text-red-500">
+                                    {error}
+                                </span>
+                            )}
                         </span>
                     </div>
                     <Button variant="outline" size="icon">
