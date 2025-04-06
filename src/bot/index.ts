@@ -37,7 +37,7 @@ const datastore: MusicQuizDatastore = new MusicQuizSQLiteDatastore(
 // Initialize YTDLP provider
 const ytDlp = new YtDlp({
   // TODO: figure out why autodetection is not working
-  binaryPath: "/Users/frank/.local/bin/yt-dlp",
+  binaryPath: process.env.YTDLP_PATH || "/Users/frank/.local/bin/yt-dlp",
 });
 
 client.once("ready", () => {
