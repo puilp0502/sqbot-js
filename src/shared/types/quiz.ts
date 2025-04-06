@@ -28,6 +28,9 @@ interface MusicQuizDatastore {
 
   // List all quiz packs
   listQuizPacks(): Promise<QuizPack[]>;
+
+  // Update quiz pack
+  updateQuizPack(quizPackId: string, quizPack: QuizPack): Promise<undefined>;
 }
 
 // Export the interfaces

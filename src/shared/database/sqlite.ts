@@ -108,6 +108,82 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
     }
   }
 
+  async updateQuizPack(quizPackId: string, quizPack: QuizPack): Promise<undefined> {
+    try {
+      // Start a transaction
+      await new Promise<void>((resolve, reject) => {
+        this.#db.run("BEGIN TRANSACTION", (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      // Update the quiz pack
+      await new Promise<void>((resolve, reject) => {
+        this.#db.run(
+          "UPDATE quiz_packs SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+          [quizPack.name, quizPack.description, new Date().toISOString(), quizPackId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      // Delete existing entries
+      await new Promise<void>((resolve, reject) => {
+        this.#db.run(
+          "DELETE FROM quiz_entries WHERE quiz_pack_id = ?",
+          [quizPackId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      // Insert new entries
+      for (const entry of quizPack.entries) {
+        await new Promise<void>((resolve, reject) => {
+          this.#db.run(
+            `INSERT INTO quiz_entries 
+            (id, quiz_pack_id, performer, canonical_name, possible_answers, yt_video_id, song_start, play_duration) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              entry.id,
+              quizPackId,
+              entry.performer,
+              entry.canonicalName,
+              JSON.stringify(entry.possibleAnswers),
+              entry.ytVideoId,
+              entry.songStart,
+              entry.playDuration
+            ],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+      }
+
+      // Commit the transaction
+      await new Promise<void>((resolve, reject) => {
+        this.#db.run("COMMIT", (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    } catch (error) {
+      // Rollback the transaction in case of error
+      await new Promise<void>((resolve) => {
+        this.#db.run("ROLLBACK", () => resolve());
+      });
+      console.error("Error updating quiz pack:", error);
+    }
+    return;
+  }
+
   #rowToQuizEntry(row: any): QuizEntry {
     return {
       id: row.id,
