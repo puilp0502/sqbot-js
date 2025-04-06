@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsc",
     "bot": "node --trace-warnings dist/bot/index.js",
+    "api": "node --trace-warnings dist/api/index.js",
     "dev": "tsc -w",
     "test": "jest"
   },
@@ -14,8 +15,13 @@
   "description": "",
   "dependencies": {
     "@discordjs/voice": "^0.18.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.5",
+    "express": "^5.1.0",
     "sqlite3": "^5.1.7",
     "uuid": "^11.1.0",
     "ytdlp-nodejs": "2.0.5"
@@ -24,7 +30,9 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^20.11.24",
     "@types/sqlite3": "^3.1.11",
+    "@types/supertest": "^6.0.3",
     "jest": "^29.7.0",
+    "supertest": "^7.1.0",
     "ts-jest": "^29.3.1",
     "typescript": "^5.3.3"
   },

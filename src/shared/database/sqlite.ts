@@ -19,8 +19,8 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
-        created_at DATETIME NOT NULL,
-        updated_at DATETIME NOT NULL
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS quiz_entries (
@@ -108,7 +108,10 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
     }
   }
 
-  async updateQuizPack(quizPackId: string, quizPack: QuizPack): Promise<undefined> {
+  async updateQuizPack(
+    quizPackId: string,
+    quizPack: QuizPack
+  ): Promise<undefined> {
     try {
       // Start a transaction
       await new Promise<void>((resolve, reject) => {
@@ -121,8 +124,13 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
       // Update the quiz pack
       await new Promise<void>((resolve, reject) => {
         this.#db.run(
-          "UPDATE quiz_packs SET name = ?, description = ?, updated_at = ? WHERE id = ?",
-          [quizPack.name, quizPack.description, new Date().toISOString(), quizPackId],
+          "INSERT OR REPLACE INTO quiz_packs (id, name, description, updated_at) VALUES (?, ?, ?, ?)",
+          [
+            quizPackId,
+            quizPack.name,
+            quizPack.description,
+            new Date().toISOString(),
+          ],
           (err) => {
             if (err) reject(err);
             else resolve();
@@ -157,7 +165,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
               JSON.stringify(entry.possibleAnswers),
               entry.ytVideoId,
               entry.songStart,
-              entry.playDuration
+              entry.playDuration,
             ],
             (err) => {
               if (err) reject(err);
