@@ -1,57 +1,117 @@
-import React, { UIEvent, useState } from "react";
+import React, { UIEvent, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Copy, FileText, GripVertical, Plus, Trash } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 
-// Define the type for song entries
-interface SongEntry {
-    id: string;
+interface QuizEntry {
+    id: string; // UUID
     performer: string;
     canonicalName: string;
     possibleAnswers: string[];
     ytVideoId: string;
-    songStart: number;
-    playDuration: number;
+    songStart: number; // in seconds
+    playDuration: number; // in seconds
+}
+
+// Interface for a quiz pack
+interface QuizPack {
+    id: string; // UUID
+    name: string;
+    description: string;
+    createdAt: Date;
+    updatedAt: Date;
+    entries: QuizEntry[];
+}
+
+// API functions
+const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
+
+async function fetchQuizPack(packId: string): Promise<QuizPack> {
+    const response = await fetch(`${API_BASE_URL}/${packId}`);
+    if (!response.ok) {
+        throw new Error("Failed to fetch quiz pack");
+    }
+    return response.json();
+}
+
+async function updateQuizPack(packId: string, pack: QuizPack): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/${packId}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(pack),
+    });
+    if (!response.ok) {
+        throw new Error("Failed to update quiz pack");
+    }
 }
 
 const SQBotEditor = () => {
-    // Initial mock data based on the wireframe
-    const [entries, setEntries] = useState<SongEntry[]>([
-        {
-            id: "1",
-            performer: "結束バンド (결속 밴드)",
-            canonicalName: "비밀 기지",
-            possibleAnswers: ["Himitsu Kichi", "ひみつ基地"],
-            ytVideoId: "ztF1ru7LEzs",
-            songStart: 39,
-            playDuration: 50,
-        },
-        {
-            id: "2",
-            performer: "結束バンド (결속 밴드)",
-            canonicalName: "그 밴드",
-            possibleAnswers: ["That Band"],
-            ytVideoId: "q-bCp4MxuYU",
-            songStart: 43,
-            playDuration: 50,
-        },
-    ]);
-
+    const [quizPack, setQuizPack] = useState<QuizPack>({
+        id: "green-wumpus-touch-grass", // Default ID
+        name: "봇치 더 락! OST 전곡",
+        description: "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        entries: [],
+    });
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(0);
-    const [currentEntry, setCurrentEntry] = useState<SongEntry | null>(
-        entries[0],
-    );
+    const [currentEntry, setCurrentEntry] = useState<QuizEntry | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // Convert seconds to MM:SS format
+    // Load quiz pack data on mount
+    useEffect(() => {
+        const loadQuizPack = async () => {
+            try {
+                setLoading(true);
+                // Extract pack ID from URL path
+                const pathSegments = window.location.pathname.split("/");
+                const packId = pathSegments[1] || quizPack.id; // Use the first segment after the domain, fallback to default
+                const pack = await fetchQuizPack(packId);
+                setQuizPack(pack);
+                if (pack.entries.length > 0) {
+                    setCurrentEntry(pack.entries[0]);
+                }
+            } catch (err) {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to load quiz pack",
+                );
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadQuizPack();
+    }, []);
+
+    // Save changes to the server
+    const saveChanges = async () => {
+        try {
+            await updateQuizPack(quizPack.id, {
+                ...quizPack,
+                updatedAt: new Date(),
+            });
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to save changes",
+            );
+        }
+    };
+
+    // Format and parse time functions remain the same
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, "0")}`;
     };
 
-    // Parse MM:SS format to seconds
     const parseTime = (timeStr: string) => {
         if (!timeStr.includes(":")) return 0;
         const [mins, secs] = timeStr.split(":").map((num) => parseInt(num, 10));
@@ -60,21 +120,30 @@ const SQBotEditor = () => {
 
     // Handle form input changes
     const handleChange = (field: string, value: any) => {
-        if (currentEntry === null) return;
+        if (!currentEntry) return;
+
         const updatedEntry = { ...currentEntry, [field]: value };
         setCurrentEntry(updatedEntry);
 
         // Update in the entries array
-        const updatedEntries = [...entries];
+        const updatedEntries = [...quizPack.entries];
         updatedEntries[selectedEntryIndex] = updatedEntry;
-        setEntries(updatedEntries);
+
+        setQuizPack((prev) => ({
+            ...prev,
+            entries: updatedEntries,
+            updatedAt: new Date(),
+        }));
+
+        // Autosave changes
+        saveChanges();
     };
 
     const handleVideoIdChange = (value: string) => {
         // Check if the value is a YouTube URL and extract the video ID
         const youtubeShortRegex = /^https:\/\/youtu\.be\/([A-Za-z0-9_-]+)/;
         const youtubeWatchRegex =
-            /^https:\/\/www.youtube\.com\/watch\?v=([A-Za-z0-9_-]+)/;
+            /^https:\/\/www.youtube.com\/watch\?v=([A-Za-z0-9_-]+)/;
         const shortMatch = value.match(youtubeShortRegex);
         const watchMatch = value.match(youtubeWatchRegex);
 
@@ -114,13 +183,13 @@ const SQBotEditor = () => {
     // Select an entry for editing
     const selectEntry = (index: number) => {
         setSelectedEntryIndex(index);
-        setCurrentEntry(entries[index]);
+        setCurrentEntry(quizPack.entries[index]);
     };
 
     // Add a new entry
     const addNewEntry = () => {
-        const newEntry = {
-            id: String(entries.length + 1),
+        const newEntry: QuizEntry = {
+            id: uuidv4(),
             performer: "",
             canonicalName: "",
             possibleAnswers: [],
@@ -129,39 +198,37 @@ const SQBotEditor = () => {
             playDuration: 50,
         };
 
-        setEntries([...entries, newEntry]);
-        setSelectedEntryIndex(entries.length);
+        setQuizPack((prev) => ({
+            ...prev,
+            entries: [...prev.entries, newEntry],
+            updatedAt: new Date(),
+        }));
+        setSelectedEntryIndex(quizPack.entries.length);
         setCurrentEntry(newEntry);
+
+        // Save the new entry
+        saveChanges();
     };
 
     // Delete an entry
-    const deleteEntry = (index: number, e: UIEvent) => {
-        e.stopPropagation(); // Prevent triggering selectEntry
+    const deleteEntry = async (index: number, e: UIEvent) => {
+        e.stopPropagation();
 
-        const newEntries = [...entries];
-        newEntries.splice(index, 1);
-        setEntries(newEntries);
+        const updatedEntries = quizPack.entries.filter((_, i) => i !== index);
+        setQuizPack((prev) => ({
+            ...prev,
+            entries: updatedEntries,
+            updatedAt: new Date(),
+        }));
 
-        // If the currently selected entry is deleted or is after the deleted entry
         if (selectedEntryIndex >= index) {
             const newSelectedIndex = Math.max(0, selectedEntryIndex - 1);
             setSelectedEntryIndex(newSelectedIndex);
-            setCurrentEntry(
-                newEntries[newSelectedIndex] || {
-                    id: "1",
-                    performer: "",
-                    canonicalName: "",
-                    possibleAnswers: [],
-                    ytVideoId: "",
-                    songStart: 0,
-                    playDuration: 50,
-                },
-            );
+            setCurrentEntry(updatedEntries[newSelectedIndex] || null);
         }
 
-        if (newEntries.length == 0) {
-            setCurrentEntry(null);
-        }
+        // Save the changes
+        await saveChanges();
     };
 
     return (
@@ -371,7 +438,7 @@ const SQBotEditor = () => {
                     </div>
 
                     <div className="divide-y">
-                        {entries.map((entry, index) => (
+                        {quizPack.entries.map((entry, index) => (
                             <div
                                 key={entry.id}
                                 className={`p-4 flex items-center cursor-pointer relative group ${
