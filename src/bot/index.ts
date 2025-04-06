@@ -82,7 +82,7 @@ client.on("messageCreate", async (message: Message) => {
       const pack = await datastore.getQuizPack(packName);
       if (!pack) {
         return message.reply(
-          `Quiz pack "${packName}" not found. Use !quiz list to see available packs.`
+          `플레이리스트 ID "${packName}"을/를 찾을 수 없습니다. !quiz list 를 통해 사용 가능한 플레이리스트를 확인할 수 있습니다.`
         );
       }
 
@@ -163,7 +163,7 @@ client.on("messageCreate", async (message: Message) => {
     case "help":
       const helpMessage = `
 **SQBot 명령어:**
-\`!quiz start [플레이리스트 명 또는 ID]\` - 지정된 플레이리스트를 가지고 새 게임을 시작합니다.
+\`!quiz start [플레이리스트 ID]\` - 지정된 플레이리스트를 가지고 새 게임을 시작합니다.
 \`!quiz stop\` - 현재 진행중인 게임을 중단합니다.
 \`!quiz scores\` - 현재 게임의 점수판을 표시합니다.
 \`!quiz list\` - 사용 가능한 플레이리스트를 표시합니다.
@@ -176,7 +176,7 @@ client.on("messageCreate", async (message: Message) => {
 
     default:
       message.reply(
-        "Unknown command. Use `!quiz help` to see available commands."
+        "잘못된 명령어입니다. `!quiz help`를 통해 사용 가능한 명령어를 확인하세요."
       );
   }
 });
