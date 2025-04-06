@@ -56,6 +56,27 @@ const SQBotEditor = () => {
         setEntries(updatedEntries);
     };
 
+    const handleVideoIdChange = (value: string) => {
+        // Check if the value is a YouTube URL and extract the video ID
+        const youtubeShortRegex = /^https:\/\/youtu\.be\/([A-Za-z0-9_-]+)/;
+        const youtubeWatchRegex =
+            /^https:\/\/www.youtube\.com\/watch\?v=([A-Za-z0-9_-]+)/;
+        const shortMatch = value.match(youtubeShortRegex);
+        const watchMatch = value.match(youtubeWatchRegex);
+
+        console.log(shortMatch, watchMatch);
+        const match = shortMatch || watchMatch;
+
+        if (match) {
+            // If it's a YouTube URL, extract the video ID and update
+            const videoId = match[1];
+            handleChange("ytVideoId", videoId);
+        } else {
+            // Otherwise, just update the value as-is
+            handleChange("ytVideoId", value);
+        }
+    };
+
     // Handle answer changes
     const handleAnswerChange = (index: number, value: string) => {
         const newAnswers = [...currentEntry.possibleAnswers];
@@ -175,7 +196,7 @@ const SQBotEditor = () => {
                                 )
                                 : (
                                     <div className="text-white text-lg">
-                                        {`<youtube embed here>`}
+                                        Video Preview will display here
                                     </div>
                                 )}
                         </div>
@@ -188,15 +209,17 @@ const SQBotEditor = () => {
                         <div className="space-y-5">
                             <div>
                                 <Label className="block text-sm mb-1">
-                                    YouTube Video ID
+                                    YouTube Video ID / URL
                                 </Label>
                                 <Input
                                     value={currentEntry.ytVideoId}
                                     onChange={(e) =>
-                                        handleChange(
-                                            "ytVideoId",
+                                        handleVideoIdChange(
                                             e.target.value,
                                         )}
+                                    onFocus={(e) => {
+                                        e.target.select();
+                                    }}
                                 />
                             </div>
 
