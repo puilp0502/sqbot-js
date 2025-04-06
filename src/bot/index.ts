@@ -1,15 +1,4 @@
 import {
-  joinVoiceChannel,
-  createAudioPlayer,
-  createAudioResource,
-  NoSubscriberBehavior,
-  AudioPlayerStatus,
-  VoiceConnectionStatus,
-  VoiceConnection,
-  entersState,
-  AudioPlayer,
-} from "@discordjs/voice";
-import {
   Client,
   GatewayIntentBits,
   Message,
@@ -17,11 +6,10 @@ import {
   TextChannel,
   ChannelType,
 } from "discord.js";
-import { MusicQuizDatastore, QuizPack, QuizEntry } from "../shared/types/quiz";
+import { MusicQuizDatastore, QuizPack } from "../shared/types/quiz";
 import dotenv from "dotenv";
 import { MusicQuizSQLiteDatastore } from "../shared/database/sqlite";
 import { YtDlp } from "ytdlp-nodejs";
-import { createStreamBridge } from "../utils";
 import { GameState } from "./GameState";
 
 // Load environment variables
