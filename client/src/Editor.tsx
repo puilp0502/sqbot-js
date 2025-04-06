@@ -5,9 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Copy, FileText, GripVertical, Plus, Trash } from "lucide-react";
 
+// Define the type for song entries
+interface SongEntry {
+    id: string;
+    performer: string;
+    canonicalName: string;
+    possibleAnswers: string[];
+    ytVideoId: string;
+    songStart: number;
+    playDuration: number;
+}
+
 const SQBotEditor = () => {
     // Initial mock data based on the wireframe
-    const [entries, setEntries] = useState([
+    const [entries, setEntries] = useState<SongEntry[]>([
         {
             id: "1",
             performer: "結束バンド (결속 밴드)",
@@ -29,7 +40,9 @@ const SQBotEditor = () => {
     ]);
 
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(0);
-    const [currentEntry, setCurrentEntry] = useState(entries[0]);
+    const [currentEntry, setCurrentEntry] = useState<SongEntry | null>(
+        entries[0],
+    );
 
     // Convert seconds to MM:SS format
     const formatTime = (seconds: number) => {
@@ -47,6 +60,7 @@ const SQBotEditor = () => {
 
     // Handle form input changes
     const handleChange = (field: string, value: any) => {
+        if (currentEntry === null) return;
         const updatedEntry = { ...currentEntry, [field]: value };
         setCurrentEntry(updatedEntry);
 
@@ -79,20 +93,20 @@ const SQBotEditor = () => {
 
     // Handle answer changes
     const handleAnswerChange = (index: number, value: string) => {
-        const newAnswers = [...currentEntry.possibleAnswers];
+        const newAnswers = [...currentEntry!.possibleAnswers];
         newAnswers[index] = value;
         handleChange("possibleAnswers", newAnswers);
     };
 
     // Add a new blank answer
     const addAnswer = () => {
-        const newAnswers = [...currentEntry.possibleAnswers, ""];
+        const newAnswers = [...currentEntry!.possibleAnswers, ""];
         handleChange("possibleAnswers", newAnswers);
     };
 
     // Remove an answer
     const removeAnswer = (index: number) => {
-        const newAnswers = [...currentEntry.possibleAnswers];
+        const newAnswers = [...currentEntry!.possibleAnswers];
         newAnswers.splice(index, 1);
         handleChange("possibleAnswers", newAnswers);
     };
@@ -144,12 +158,16 @@ const SQBotEditor = () => {
                 },
             );
         }
+
+        if (newEntries.length == 0) {
+            setCurrentEntry(null);
+        }
     };
 
     return (
         <div className="flex flex-col h-screen">
             {/* Header */}
-            <div className="flex justify-between items-center p-3 border-b">
+            <div className="flex justify-between items-center p-3 border-b h-14">
                 <div className="text-2xl font-bold text-red-500">
                     SQBot Editor
                 </div>
@@ -175,14 +193,14 @@ const SQBotEditor = () => {
             </div>
 
             {/* Main Content */}
-            <div className="flex flex-1">
+            <div className="flex flex-1 h-[calc(100vh-20*var(--spacing))]">
                 {/* Left Column - YouTube Preview & Form */}
-                <div className="w-1/2 border-r">
+                <div className="w-1/2 border-r flex flex-col">
                     {/* YouTube Preview */}
                     <div className="border-b p-3">
                         {/* YouTube preview section */}
                         <div className="aspect-video bg-gray-900 flex items-center justify-center">
-                            {currentEntry.ytVideoId
+                            {currentEntry?.ytVideoId
                                 ? (
                                     <iframe
                                         width="100%"
@@ -203,132 +221,146 @@ const SQBotEditor = () => {
                     </div>
 
                     {/* Entry Form */}
-                    <div className="p-4">
+                    <div className="p-4 flex-grow-0 flex-basis-auto overflow-y-auto">
                         {/* Song information editor form */}
 
-                        <div className="space-y-5">
-                            <div>
-                                <Label className="block text-sm mb-1">
-                                    YouTube Video ID / URL
-                                </Label>
-                                <Input
-                                    value={currentEntry.ytVideoId}
-                                    onChange={(e) =>
-                                        handleVideoIdChange(
-                                            e.target.value,
-                                        )}
-                                    onFocus={(e) => {
-                                        e.target.select();
-                                    }}
-                                />
-                            </div>
-
-                            <div>
-                                <Label className="block text-sm mb-1">
-                                    가수명
-                                </Label>
-                                <Input
-                                    value={currentEntry.performer}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            "performer",
-                                            e.target.value,
-                                        )}
-                                />
-                            </div>
-
-                            <div>
-                                <Label className="block text-sm mb-1">
-                                    노래 제목
-                                </Label>
-                                <Input
-                                    value={currentEntry.canonicalName}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            "canonicalName",
-                                            e.target.value,
-                                        )}
-                                />
-                            </div>
-
-                            <div>
-                                <Label className="block text-sm mb-1">
-                                    복수정답
-                                </Label>
-                                {currentEntry.possibleAnswers.map((
-                                    answer,
-                                    index,
-                                ) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-center mt-2 group"
-                                    >
+                        {currentEntry
+                            ? (
+                                <div className="space-y-5">
+                                    <div>
+                                        <Label className="block text-sm mb-1">
+                                            YouTube Video ID / URL
+                                        </Label>
                                         <Input
-                                            value={answer}
+                                            value={currentEntry.ytVideoId}
                                             onChange={(e) =>
-                                                handleAnswerChange(
-                                                    index,
+                                                handleVideoIdChange(
+                                                    e.target.value,
+                                                )}
+                                            onFocus={(e) => {
+                                                e.target.select();
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label className="block text-sm mb-1">
+                                            가수명
+                                        </Label>
+                                        <Input
+                                            value={currentEntry.performer}
+                                            onChange={(e) =>
+                                                handleChange(
+                                                    "performer",
                                                     e.target.value,
                                                 )}
                                         />
-                                        <button
-                                            className="ml-2 text-red-500 opacity-0 group-hover:opacity-100"
-                                            onClick={() => removeAnswer(index)}
-                                        >
-                                            ×
-                                        </button>
                                     </div>
-                                ))}
-                                <Button
-                                    variant="ghost"
-                                    className="mt-2 text-sm hover:bg-gray-100"
-                                    onClick={addAnswer}
-                                >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    정답 추가
-                                </Button>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label className="block text-sm mb-1">
-                                        재생 시작
-                                    </Label>
-                                    <Input
-                                        value={formatTime(
-                                            currentEntry.songStart,
-                                        )}
-                                        onChange={(e) =>
-                                            handleChange(
-                                                "songStart",
-                                                parseTime(e.target.value),
-                                            )}
-                                    />
+                                    <div>
+                                        <Label className="block text-sm mb-1">
+                                            노래 제목
+                                        </Label>
+                                        <Input
+                                            value={currentEntry.canonicalName}
+                                            onChange={(e) =>
+                                                handleChange(
+                                                    "canonicalName",
+                                                    e.target.value,
+                                                )}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label className="block text-sm mb-1">
+                                            복수정답
+                                        </Label>
+                                        {currentEntry.possibleAnswers.map((
+                                            answer,
+                                            index,
+                                        ) => (
+                                            <div
+                                                key={index}
+                                                className="flex items-center mt-2 group"
+                                            >
+                                                <Input
+                                                    value={answer}
+                                                    onChange={(e) =>
+                                                        handleAnswerChange(
+                                                            index,
+                                                            e.target.value,
+                                                        )}
+                                                />
+                                                <button
+                                                    className="ml-2 text-red-500 opacity-0 group-hover:opacity-100"
+                                                    onClick={() =>
+                                                        removeAnswer(index)}
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <Button
+                                            variant="ghost"
+                                            className="mt-2 text-sm hover:bg-gray-100"
+                                            onClick={addAnswer}
+                                        >
+                                            <Plus className="h-4 w-4 mr-1" />
+                                            정답 추가
+                                        </Button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <Label className="block text-sm mb-1">
+                                                재생 시작
+                                            </Label>
+                                            <Input
+                                                value={formatTime(
+                                                    currentEntry.songStart,
+                                                )}
+                                                onChange={(e) =>
+                                                    handleChange(
+                                                        "songStart",
+                                                        parseTime(
+                                                            e.target.value,
+                                                        ),
+                                                    )}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label className="block text-sm mb-1">
+                                                재생 종료
+                                            </Label>
+                                            <Input
+                                                value={formatTime(
+                                                    currentEntry.songStart +
+                                                        currentEntry
+                                                            .playDuration,
+                                                )}
+                                                onChange={(e) => {
+                                                    const endTime = parseTime(
+                                                        e.target.value,
+                                                    );
+                                                    const duration = endTime -
+                                                        currentEntry.songStart;
+                                                    handleChange(
+                                                        "playDuration",
+                                                        duration > 0
+                                                            ? duration
+                                                            : 0,
+                                                    );
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <Label className="block text-sm mb-1">
-                                        재생 종료
-                                    </Label>
-                                    <Input
-                                        value={formatTime(
-                                            currentEntry.songStart +
-                                                currentEntry.playDuration,
-                                        )}
-                                        onChange={(e) => {
-                                            const endTime = parseTime(
-                                                e.target.value,
-                                            );
-                                            const duration = endTime -
-                                                currentEntry.songStart;
-                                            handleChange(
-                                                "playDuration",
-                                                duration > 0 ? duration : 0,
-                                            );
-                                        }}
-                                    />
+                            )
+                            : (
+                                <div className="flex items-center justify-center h-full text-gray-400 text-xl">
+                                    곡 추가해서 편집 시작
                                 </div>
-                            </div>
-                        </div>
+                            )}
                     </div>
                 </div>
 
