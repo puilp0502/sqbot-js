@@ -492,11 +492,7 @@ const SQBotEditor = () => {
                 </div>
 
                 {/* Right Column - Quiz Pack Entries */}
-                <div className="w-1/2">
-                    <div className="border-b p-3">
-                        {/* Quiz Pack entries list */}
-                    </div>
-
+                <div className="w-1/2 flex-grow-0 overflow-y-auto">
                     <div className="divide-y">
                         {quizPack.entries.map((entry, index) => (
                             <div
@@ -536,17 +532,16 @@ const SQBotEditor = () => {
                                 </div>
                             </div>
                         ))}
-                    </div>
-
-                    <div className="p-4 flex justify-center">
-                        <Button
-                            onClick={addNewEntry}
-                            variant="outline"
-                            className="flex items-center"
-                        >
-                            <Plus className="h-4 w-4 mr-1" />
-                            곡 추가
-                        </Button>
+                        <div className="p-4 flex justify-center">
+                            <Button
+                                onClick={addNewEntry}
+                                variant="outline"
+                                className="flex items-center"
+                            >
+                                <Plus className="h-4 w-4 mr-1" />
+                                곡 추가
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
