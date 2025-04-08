@@ -1,30 +1,17 @@
-import React, { UIEvent, useCallback, useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    SetStateAction,
+    UIEvent,
+    useCallback,
+    useEffect,
+    useState,
+} from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Copy, FileText, GripVertical, Plus, Trash } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-
-interface QuizEntry {
-    id: string; // UUID
-    performer: string;
-    canonicalName: string;
-    possibleAnswers: string[];
-    ytVideoId: string;
-    songStart: number; // in seconds
-    playDuration: number; // in seconds
-}
-
-// Interface for a quiz pack
-interface QuizPack {
-    id: string; // UUID
-    name: string;
-    description: string;
-    createdAt: Date;
-    updatedAt: Date;
-    entries: QuizEntry[];
-}
+import { QuizEntry, QuizPack } from "./types";
+import DraggableQuizEntries from "./Entries";
 
 // API functions
 const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
@@ -95,10 +82,13 @@ const SQBotEditor = () => {
         entries: [],
     });
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(0);
-    const [currentEntry, setCurrentEntry] = useState<QuizEntry | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    const currentEntry = selectedEntryIndex < quizPack.entries.length
+        ? quizPack.entries[selectedEntryIndex]
+        : null;
 
     // Create a debounced save function
     const debouncedSave = useDebounce(async (packToSave: QuizPack) => {
@@ -125,9 +115,6 @@ const SQBotEditor = () => {
                 const packId = pathSegments[1] || quizPack.id; // Use the first segment after the domain, fallback to default
                 const pack = await fetchQuizPack(packId);
                 setQuizPack(pack);
-                if (pack.entries.length > 0) {
-                    setCurrentEntry(pack.entries[0]);
-                }
             } catch (err) {
                 setError(
                     err instanceof Error
@@ -147,7 +134,6 @@ const SQBotEditor = () => {
         if (!currentEntry) return;
 
         const updatedEntry = { ...currentEntry, [field]: value };
-        setCurrentEntry(updatedEntry);
 
         // Update in the entries array
         const updatedEntries = [...quizPack.entries];
@@ -209,7 +195,6 @@ const SQBotEditor = () => {
     // Select an entry for editing
     const selectEntry = (index: number) => {
         setSelectedEntryIndex(index);
-        setCurrentEntry(quizPack.entries[index]);
     };
 
     // Add a new entry
@@ -232,15 +217,14 @@ const SQBotEditor = () => {
 
         setQuizPack(updatedPack);
         setSelectedEntryIndex(quizPack.entries.length);
-        setCurrentEntry(newEntry);
 
         // Trigger debounced save
         debouncedSave(updatedPack);
     };
 
     // Delete an entry
-    const deleteEntry = (index: number, e: UIEvent) => {
-        e.stopPropagation();
+    const deleteEntry = (index: number, e?: UIEvent) => {
+        e?.stopPropagation();
 
         const updatedEntries = quizPack.entries.filter((_, i) => i !== index);
         const updatedPack = {
@@ -254,7 +238,6 @@ const SQBotEditor = () => {
         if (selectedEntryIndex >= index) {
             const newSelectedIndex = Math.max(0, selectedEntryIndex - 1);
             setSelectedEntryIndex(newSelectedIndex);
-            setCurrentEntry(updatedEntries[newSelectedIndex] || null);
         }
 
         // Trigger debounced save
@@ -493,56 +476,15 @@ const SQBotEditor = () => {
 
                 {/* Right Column - Quiz Pack Entries */}
                 <div className="w-1/2 flex-grow-0 overflow-y-auto">
-                    <div className="divide-y">
-                        {quizPack.entries.map((entry, index) => (
-                            <div
-                                key={entry.id}
-                                className={`p-4 flex items-center cursor-pointer relative group ${
-                                    index === selectedEntryIndex
-                                        ? "bg-gray-100"
-                                        : "hover:bg-gray-50"
-                                }`}
-                                onClick={() => selectEntry(index)}
-                            >
-                                <div className="flex items-center flex-1">
-                                    <GripVertical className="h-5 w-5 mr-2 text-gray-400 cursor-grab" />
-                                    <div className="mr-2 font-bold">
-                                        {index + 1}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="font-medium">
-                                            {entry.performer} -{" "}
-                                            {entry.canonicalName}
-                                        </div>
-                                        <div className="text-sm text-blue-500">
-                                            https://youtu.be/{entry
-                                                .ytVideoId}?t={entry.songStart}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100"
-                                        onClick={(e) => deleteEntry(index, e)}
-                                    >
-                                        <Trash className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                        <div className="p-4 flex justify-center">
-                            <Button
-                                onClick={addNewEntry}
-                                variant="outline"
-                                className="flex items-center"
-                            >
-                                <Plus className="h-4 w-4 mr-1" />
-                                곡 추가
-                            </Button>
-                        </div>
-                    </div>
+                    <DraggableQuizEntries
+                        quizPack={quizPack}
+                        setQuizPack={setQuizPack}
+                        debouncedSave={debouncedSave}
+                        selectedEntryIndex={selectedEntryIndex}
+                        selectEntry={selectEntry}
+                        addNewEntry={addNewEntry}
+                        deleteEntry={deleteEntry}
+                    />
                 </div>
             </div>
         </div>
