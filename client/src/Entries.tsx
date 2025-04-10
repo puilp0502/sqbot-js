@@ -78,7 +78,7 @@ const SortableEntry = (
         <div
             ref={setNodeRef}
             style={style}
-            className={`p-4 flex items-center cursor-pointer relative ${
+            className={`p-4 flex items-center cursor-pointer relative group ${
                 index === selectedEntryIndex
                     ? "bg-gray-100"
                     : "hover:bg-gray-50"
@@ -90,29 +90,29 @@ const SortableEntry = (
                     {...attributes}
                     {...listeners}
                 >
-                    <GripVertical className="h-5 w-5 mr-2 text-gray-400 cursor-grab" />
+                    <GripVertical className="size-4 mr-2 text-gray-400 cursor-grab" />
                 </div>
-                <div className="mr-2 font-bold">{index + 1}</div>
+                <div className="mr-4 font-bold">{index + 1}</div>
                 <div className="flex-1">
-                    <div className="font-medium">
+                    <div className="font-medium truncate">
                         {entry.performer} - {entry.canonicalName}
                     </div>
-                    <div className="text-sm text-blue-500">
-                        https://youtu.be/{entry.ytVideoId}?t={entry.songStart}
+                    <div className="text-xs text-blue-500 truncate">
+                        {entry.ytVideoId ? `https://youtu.be/${entry.ytVideoId}?t=${entry.songStart}` : ''}
                     </div>
                 </div>
             </div>
-            <div className="flex items-center space-x-1">
-                <button
-                    className="text-gray-400 hover:text-gray-700"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(index, e);
-                    }}
-                >
-                    <Trash className="h-4 w-4" />
-                </button>
-            </div>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 opacity-0 group-hover:opacity-100 hover:text-red-500"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(index, e);
+                }}
+            >
+                <Trash className="h-4 w-4" />
+            </Button>
         </div>
     );
 };
