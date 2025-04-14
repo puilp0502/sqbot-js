@@ -102,6 +102,7 @@ export class GameState {
       {
         format: "bestaudio",
         downloadSections: sectionSpec,
+        forceKeyframesAtCuts: true,
         postprocessorArgs: {
           af: ["loudnorm"],
         },
