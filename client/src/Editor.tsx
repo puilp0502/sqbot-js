@@ -31,6 +31,7 @@ import { Card, CardContent } from "./components/ui/card";
 import { Separator } from "./components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { TimeRangeInput } from "./TimeInput";
+import { SaveButton, SaveButtonRef } from "./SaveButton";
 
 // API functions
 const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
@@ -93,7 +94,7 @@ function useDebounce<T extends (...args: any[]) => any>(
 
 const SQBotEditor = () => {
     const [quizPack, setQuizPack] = useState<QuizPack>({
-        id: "green-wumpus-touch-grass", // Default ID
+        id: "wumpus-touch-green-grass", // Default ID
         name: "",
         description: "",
         createdAt: new Date(),
@@ -104,27 +105,39 @@ const SQBotEditor = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const saveButtonRef = useRef<SaveButtonRef>(null);
 
     const currentEntry = selectedEntryIndex < quizPack.entries.length
         ? quizPack.entries[selectedEntryIndex]
         : null;
 
-    const saveImmediate = async (packToSave: QuizPack) => {
+    const saveImmediate = async (
+        packToSave: QuizPack,
+        throwError: boolean = false,
+    ) => {
         try {
             setIsSaving(true);
             await updateQuizPack(packToSave.id, packToSave);
             setError(null);
         } catch (err) {
-            setError(
+            toast(
                 err instanceof Error ? err.message : "Failed to save changes",
             );
+            if (throwError) {
+                throw err;
+            }
         } finally {
             setIsSaving(false);
         }
     };
     // Create a debounced save function
     const debouncedSave = useDebounce(async (packToSave: QuizPack) => {
-        saveImmediate(packToSave);
+        if (saveButtonRef.current === null) {
+            // if we somehow don't have reference to save button,  call saveImmediate directly
+            saveImmediate(packToSave);
+            return;
+        }
+        saveButtonRef.current.startSave();
     }, 3000); // 5 second delay
 
     // Load quiz pack data on mount
@@ -151,10 +164,6 @@ const SQBotEditor = () => {
         loadQuizPack();
     }, []);
 
-    type QuizEntryChanges = {
-        key: keyof QuizEntry;
-        value: any;
-    };
     // Handle form input changes
     const handleChange = (
         changes: keyof QuizEntry | Partial<QuizEntry>,
@@ -327,26 +336,15 @@ const SQBotEditor = () => {
                                 >
                                     <Copy className="h-4 w-4" />
                                 </Button>
-                                {isSaving && (
-                                    <span className="ml-2 text-blue-500">
-                                        저장 중...
-                                    </span>
-                                )}
-                                {error && (
-                                    <span className="ml-2 text-red-500">
-                                        {error}
-                                    </span>
-                                )}
                             </div>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center gap-1 pointer-cursor"
-                        >
-                            <Save className="h-4 w-4" />
-                            <span>Save</span>
-                        </Button>
+                        <SaveButton
+                            minLoadingDuration={500}
+                            onSave={async () => {
+                                await saveImmediate(quizPack, true);
+                            }}
+                            ref={saveButtonRef}
+                        />
                     </div>
                 </div>
             </header>
@@ -535,13 +533,13 @@ const SQBotEditor = () => {
                                             value="entries"
                                             className="text-sm"
                                         >
-                                            Entries
+                                            곡 목록
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="settings"
                                             className="text-sm"
                                         >
-                                            Pack Settings
+                                            플레이리스트 설정
                                         </TabsTrigger>
                                     </TabsList>
                                 </div>
@@ -555,6 +553,31 @@ const SQBotEditor = () => {
                                         addNewEntry={addNewEntry}
                                         deleteEntry={deleteEntry}
                                     />
+                                </TabsContent>
+                                <TabsContent
+                                    value="settings"
+                                    className="p-6 space-y-4 border-t m-0"
+                                >
+                                    <div className="flex gap-2 ">
+                                        <label className="text-sm font-medium">
+                                            플레이리스트 설명
+                                        </label>
+                                        <textarea
+                                            className="w-full h-24 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            placeholder="플레이리스트의 컨셉 등"
+                                            value={quizPack.description}
+                                            onChange={(e) => {
+                                                const updatedPack = {
+                                                    ...quizPack,
+                                                    description: e.target.value,
+                                                    updatedAt: new Date(),
+                                                };
+                                                setQuizPack(updatedPack);
+                                                debouncedSave(updatedPack);
+                                            }}
+                                        >
+                                        </textarea>
+                                    </div>
                                 </TabsContent>
                             </Tabs>
                         </CardContent>
