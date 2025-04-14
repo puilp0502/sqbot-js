@@ -533,7 +533,7 @@ const SQBotEditor = () => {
                                             value="entries"
                                             className="text-sm"
                                         >
-                                            곡 목록
+                                            곡 목록 ({quizPack.entries.length})
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="settings"
