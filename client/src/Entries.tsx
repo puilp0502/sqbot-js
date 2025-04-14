@@ -1,4 +1,11 @@
-import { Dispatch, SetStateAction, UIEvent, useState } from "react";
+import {
+    Dispatch,
+    SetStateAction,
+    UIEvent,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 import {
     closestCenter,
     DndContext,
@@ -68,6 +75,12 @@ const SortableEntry = (
         transform,
         transition,
     } = useSortable({ id: entry.id });
+    const scrollIntoViewRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (index === selectedEntryIndex) {
+            scrollIntoViewRef.current?.scrollIntoView();
+        }
+    }, [selectedEntryIndex]);
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -85,7 +98,7 @@ const SortableEntry = (
             }`}
             onClick={() => onSelect(index)}
         >
-            <div className="flex items-center flex-1">
+            <div className="flex items-center flex-1" ref={scrollIntoViewRef}>
                 <div
                     {...attributes}
                     {...listeners}
@@ -98,7 +111,9 @@ const SortableEntry = (
                         {entry.performer} - {entry.canonicalName}
                     </div>
                     <div className="text-xs text-blue-500 truncate">
-                        {entry.ytVideoId ? `https://youtu.be/${entry.ytVideoId}?t=${entry.songStart}` : ''}
+                        {entry.ytVideoId
+                            ? `https://youtu.be/${entry.ytVideoId}?t=${entry.songStart}`
+                            : ""}
                     </div>
                 </div>
             </div>
@@ -178,7 +193,7 @@ const DraggableQuizEntries = (
     };
 
     return (
-        <div className="divide-y">
+        <div className="divide-y border-t">
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -188,7 +203,7 @@ const DraggableQuizEntries = (
                     items={quizPack.entries.map((entry) => entry.id)}
                     strategy={verticalListSortingStrategy}
                 >
-                    <div className="divide-y">
+                    <div className="divide-y max-h-[calc(100vh-16rem)] overflow-y-auto">
                         {quizPack.entries.map((entry, index) => (
                             <SortableEntry
                                 key={entry.id}
