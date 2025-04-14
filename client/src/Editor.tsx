@@ -1,8 +1,10 @@
 import {
+    FocusEvent,
     SetStateAction,
     UIEvent,
     useCallback,
     useEffect,
+    useRef,
     useState,
 } from "react";
 import { Input } from "@/components/ui/input";
@@ -113,26 +115,37 @@ const SQBotEditor = () => {
     };
 
     const parseTime = (timeStr: string) => {
-        if (!timeStr.includes(":")) return parseInt(timeStr); // treat it as raw seconds
-        const [mins, secs] = timeStr.split(":").map((num) => parseInt(num, 10));
-        if (secs >= 60 || mins >= 60) return NaN;
-        return mins * 60 + secs;
+        const calculated = (() => {
+            if (!timeStr.includes(":")) return parseInt(timeStr); // treat it as raw seconds
+            const [mins, secs] = timeStr.split(":").map((num) =>
+                parseInt(num, 10)
+            );
+            if (secs >= 60 || mins >= 60) return NaN;
+            return mins * 60 + secs;
+        })();
+        console.log(timeStr, "->", calculated);
+        if (calculated < 0) return NaN;
+        return calculated;
     };
 
-    console.log(currentEntry?.songStart);
-    console.log(formatTime(currentEntry?.songStart || 0));
+    const songStartRef = useRef<HTMLInputElement>(null);
+    const songEndRef = useRef<HTMLInputElement>(null);
 
-    const [songStart, setSongStart] = useState(
-        "0:00",
-    );
-
-    if (songStart !== formatTime(currentEntry?.songStart || 0)) {
-        console.log("sss");
-        setSongStart(
-            formatTime(currentEntry?.songStart || 0),
+    useEffect(() => {
+        console.log("useEffect called:", currentEntry);
+        if (
+            songStartRef.current === null || songEndRef.current === null ||
+            currentEntry === null
+        ) {
+            console.log("early return from useEffect");
+            return;
+        }
+        songStartRef.current;
+        songStartRef.current.value = formatTime(currentEntry.songStart);
+        songEndRef.current.value = formatTime(
+            currentEntry.songStart + currentEntry.playDuration,
         );
-    }
-    const [songEnd, setSongEnd] = useState("");
+    }, [currentEntry?.songStart, currentEntry?.playDuration]);
 
     const saveImmediate = async (packToSave: QuizPack) => {
         try {
@@ -176,12 +189,32 @@ const SQBotEditor = () => {
         loadQuizPack();
     }, []);
 
+    type QuizEntryChanges = {
+        key: keyof QuizEntry;
+        value: any;
+    };
     // Handle form input changes
-    const handleChange = (field: keyof QuizEntry, value: any) => {
+    const handleChange = (
+        changes: keyof QuizEntry | QuizEntryChanges[],
+        value?: any,
+    ) => {
         if (!currentEntry) return;
+        let changesArray: QuizEntryChanges[];
+        if (typeof changes === "string" && value !== undefined) {
+            changesArray = [{ key: changes, value: value }];
+        } else {
+            changesArray = changes as QuizEntryChanges[];
+        }
 
-        const updatedEntry = { ...currentEntry, [field]: value };
+        const updatedEntry = changesArray.reduce(
+            (entry, change) => ({
+                ...entry,
+                [change.key]: change.value,
+            }),
+            { ...currentEntry },
+        );
 
+        console.log("handleChange: updatedEntry:", updatedEntry);
         // Update in the entries array
         const updatedEntries = [...quizPack.entries];
         updatedEntries[selectedEntryIndex] = updatedEntry;
@@ -292,35 +325,51 @@ const SQBotEditor = () => {
     };
 
     const synchronizeTimeInputs = (start: number, end: number) => {
+        console.log("synchronizeTimeInputs:", start, end);
         const duration = end - start;
-        setSongStart(formatTime(start));
-        setSongEnd(formatTime(end));
-        handleChange("songStart", start);
-        handleChange("playDuration", duration);
+        handleChange([
+            { key: "songStart", value: start },
+            { key: "playDuration", value: duration },
+        ]);
     };
 
-    const handleSongStartFinishEditing = () => {
-        const parsedStart = parseTime(songStart);
+    const handleSongStartFinishEditing = (e: FocusEvent<HTMLInputElement>) => {
+        if (songStartRef.current === null || songEndRef.current === null) {
+            return;
+        }
+        const parsedStart = parseTime(e.target.value);
         if (isNaN(parsedStart)) { // value is invalid, roll back user-made changes
             const originalStart = formatTime(currentEntry?.songStart || 0);
-            setSongStart(originalStart);
+            songStartRef.current.value = originalStart;
         } else { // parse successful, update value
-            synchronizeTimeInputs(parsedStart, parseTime(songEnd));
+            synchronizeTimeInputs(
+                parsedStart,
+                parseTime(songEndRef.current.value),
+            );
         }
     };
 
-    const handleSongEndFinishEditing = () => {
-        const parsedEnd = parseTime(songEnd);
-        console.log(songEnd, parsedEnd);
+    const handleSongEndFinishEditing = (e: FocusEvent<HTMLInputElement>) => {
+        if (
+            songStartRef.current === null || songEndRef.current === null ||
+            currentEntry === null
+        ) {
+            return;
+        }
+        let parsedEnd = parseTime(e.target.value);
         if (isNaN(parsedEnd)) { // value is invalid, roll back user-made changes
             const originalEnd = formatTime(
-                currentEntry
-                    ? currentEntry.songStart + currentEntry.playDuration
-                    : 0,
+                currentEntry.songStart + currentEntry.playDuration,
             );
-            setSongEnd(originalEnd);
+            songEndRef.current.value = originalEnd;
         } else { // parse successful, update value
-            synchronizeTimeInputs(parseTime(songStart), parsedEnd);
+            if (parsedEnd < currentEntry.songStart) {
+                parsedEnd = currentEntry.songStart;
+            }
+            synchronizeTimeInputs(
+                parseTime(songStartRef.current.value),
+                parsedEnd,
+            );
         }
     };
 
@@ -552,13 +601,8 @@ const SQBotEditor = () => {
                                                         재생 시작
                                                     </Label>
                                                     <Input
-                                                        value={songStart}
+                                                        ref={songStartRef}
                                                         onBlur={handleSongStartFinishEditing}
-                                                        onChange={(e) => {
-                                                            setSongStart(
-                                                                e.target.value,
-                                                            );
-                                                        }}
                                                     />
                                                 </div>
                                                 <div>
@@ -566,12 +610,7 @@ const SQBotEditor = () => {
                                                         재생 종료
                                                     </Label>
                                                     <Input
-                                                        value={songEnd}
-                                                        onChange={(e) => {
-                                                            setSongEnd(
-                                                                e.target.value,
-                                                            );
-                                                        }}
+                                                        ref={songEndRef}
                                                         onBlur={handleSongEndFinishEditing}
                                                     />
                                                 </div>
