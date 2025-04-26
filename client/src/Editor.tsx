@@ -37,7 +37,22 @@ import { SaveButton, SaveButtonRef } from "./SaveButton";
 const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
 
 async function fetchQuizPack(packId: string): Promise<QuizPack> {
-    const response = await fetch(`${API_BASE_URL}/${packId}`);
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+        // Handle appropriately - maybe redirect to login or throw a specific error
+        throw new Error("Authentication token not found. Please log in.");
+    }
+    const response = await fetch(`${API_BASE_URL}/${packId}`, {
+        headers: {
+            "Authorization": token,
+        },
+    });
+    if (response.status === 401) {
+        // Handle unauthorized access, e.g., redirect to login
+        localStorage.removeItem("authToken"); // Clear invalid token
+        window.location.href = "/login"; // Force redirect
+        throw new Error("Unauthorized access. Redirecting to login.");
+    }
     if (!response.ok) {
         throw new Error("Failed to fetch quiz pack");
     }
@@ -45,13 +60,23 @@ async function fetchQuizPack(packId: string): Promise<QuizPack> {
 }
 
 async function updateQuizPack(packId: string, pack: QuizPack): Promise<void> {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+    }
     const response = await fetch(`${API_BASE_URL}/${packId}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
+            "Authorization": token, // Add the Authorization header
         },
         body: JSON.stringify(pack),
     });
+    if (response.status === 401) {
+        localStorage.removeItem("authToken"); // Clear invalid token
+        window.location.href = "/login"; // Force redirect
+        throw new Error("Unauthorized access. Redirecting to login.");
+    }
     if (!response.ok) {
         throw new Error("Failed to update quiz pack");
     }
@@ -147,7 +172,8 @@ const SQBotEditor = () => {
                 setLoading(true);
                 // Extract pack ID from URL path
                 const pathSegments = window.location.pathname.split("/");
-                const packId = pathSegments[1] || quizPack.id; // Use the first segment after the domain, fallback to default
+                const packId = pathSegments[pathSegments.length - 1] ||
+                    quizPack.id; // Use the last segment after the domain, fallback to default
                 const pack = await fetchQuizPack(packId);
                 setQuizPack(pack);
             } catch (err) {
