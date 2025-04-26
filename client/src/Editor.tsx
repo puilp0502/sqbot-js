@@ -423,6 +423,7 @@ const SQBotEditor = () => {
                                                                 "performer",
                                                                 e.target.value,
                                                             )}
+                                                        placeholder={"e.g., Rick Astley"}
                                                     />
                                                 </div>
                                                 <div>
@@ -442,6 +443,7 @@ const SQBotEditor = () => {
                                                                     e.target
                                                                         .value,
                                                                 )}
+                                                            placeholder={"e.g., Never Gonna Give You Up"}
                                                         />
                                                     </div>
                                                 </div>
