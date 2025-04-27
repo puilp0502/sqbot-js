@@ -32,9 +32,74 @@ import { Separator } from "./components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { TimeRangeInput } from "./TimeInput";
 import { SaveButton, SaveButtonRef } from "./SaveButton";
+import {
+    LoaderFunctionArgs,
+    useLoaderData,
+    useNavigation,
+} from "react-router-dom";
 
 // API functions
 const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
+
+// Loader function for React Router
+export async function loader({ params }: LoaderFunctionArgs) {
+    const packId = params.packId;
+    if (!packId) {
+        throw new Response("Pack ID not found", { status: 404 });
+    }
+
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+        // Redirect to login if no token is found
+        return { redirectTo: "/login" };
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/${packId}`, {
+            headers: {
+                "Authorization": token,
+            },
+        });
+
+        if (response.status === 401) {
+            // Handle unauthorized access
+            localStorage.removeItem("authToken"); // Clear invalid token
+            return { redirectTo: "/login" };
+        }
+
+        // Specifically handle 404 Not Found responses
+        if (response.status === 404) {
+            throw new Response(`Quiz pack '${packId}' not found`, {
+                status: 404,
+            });
+        }
+
+        if (!response.ok) {
+            throw new Response(
+                `Failed to fetch quiz pack: ${response.statusText}`,
+                {
+                    status: response.status,
+                },
+            );
+        }
+
+        const quizPack = await response.json();
+        return { quizPack };
+    } catch (error) {
+        // Re-throw the error if it's already a Response object (e.g., our 404 Response)
+        if (error instanceof Response) {
+            throw error;
+        }
+
+        console.error("Loader error:", error);
+        throw new Response(
+            error instanceof Error ? error.message : "Failed to load quiz pack",
+            {
+                status: 500,
+            },
+        );
+    }
+}
 
 async function fetchQuizPack(packId: string): Promise<QuizPack> {
     const token = localStorage.getItem("authToken");
@@ -118,19 +183,39 @@ function useDebounce<T extends (...args: any[]) => any>(
 }
 
 const SQBotEditor = () => {
-    const [quizPack, setQuizPack] = useState<QuizPack>({
-        id: "wumpus-touch-green-grass", // Default ID
-        name: "",
-        description: "",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        entries: [],
-    });
+    // Use the loader data
+    const { quizPack: loadedQuizPack, redirectTo } = useLoaderData() as {
+        quizPack?: QuizPack;
+        redirectTo?: string;
+    };
+    const navigation = useNavigation();
+
+    // Handle redirect if needed
+    useEffect(() => {
+        if (redirectTo) {
+            window.location.href = redirectTo;
+        }
+    }, [redirectTo]);
+
+    // Initialize state with loaded data or default values
+    const [quizPack, setQuizPack] = useState<QuizPack>(
+        loadedQuizPack || {
+            id: "wumpus-touch-green-grass", // Default ID
+            name: "",
+            description: "",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            entries: [],
+        },
+    );
+
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(0);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const saveButtonRef = useRef<SaveButtonRef>(null);
+
+    // Check if we're in a loading state
+    const isLoading = navigation.state === "loading";
 
     const currentEntry = selectedEntryIndex < quizPack.entries.length
         ? quizPack.entries[selectedEntryIndex]
@@ -164,31 +249,6 @@ const SQBotEditor = () => {
         }
         saveButtonRef.current.startSave();
     }, 3000); // 5 second delay
-
-    // Load quiz pack data on mount
-    useEffect(() => {
-        const loadQuizPack = async () => {
-            try {
-                setLoading(true);
-                // Extract pack ID from URL path
-                const pathSegments = window.location.pathname.split("/");
-                const packId = pathSegments[pathSegments.length - 1] ||
-                    quizPack.id; // Use the last segment after the domain, fallback to default
-                const pack = await fetchQuizPack(packId);
-                setQuizPack(pack);
-            } catch (err) {
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to load quiz pack",
-                );
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        loadQuizPack();
-    }, []);
 
     // Handle form input changes
     const handleChange = (
@@ -320,6 +380,21 @@ const SQBotEditor = () => {
         // Trigger debounced save
         debouncedSave(updatedPack);
     };
+
+    // Show loading state if needed
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin mx-auto">
+                    </div>
+                    <p className="mt-4 text-lg font-medium">
+                        Loading quiz pack...
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-screen bg-gray-50">

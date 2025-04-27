@@ -7,7 +7,8 @@ import {
     useLocation,
 } from "react-router-dom";
 import Login from "./Login";
-import Editor from "./Editor";
+import Editor, { loader as editorLoader } from "./Editor";
+import { EditorErrorBoundary } from "./components/EditorErrorBoundary";
 
 // Helper component to protect routes
 const ProtectedRoute: React.FC = () => {
@@ -62,10 +63,8 @@ const router = createBrowserRouter([
             {
                 path: "/editor/:packId",
                 element: <Editor />,
-                // Ready for future loader implementation
-                // loader: ({ params }) => {
-                //     return fetchPackData(params.packId);
-                // },
+                loader: editorLoader,
+                errorElement: <EditorErrorBoundary />,
             },
             // Add other protected routes here
         ],
