@@ -15,10 +15,12 @@ import {
     Clock,
     Copy,
     FileText,
+    FolderOpen,
     GripVertical,
     Music,
     Plus,
     Save,
+    Search,
     Trash,
     User,
     X,
@@ -35,8 +37,10 @@ import { SaveButton, SaveButtonRef } from "./SaveButton";
 import {
     LoaderFunctionArgs,
     useLoaderData,
+    useNavigate,
     useNavigation,
 } from "react-router-dom";
+import PlaylistListModal from "./PlaylistListModal";
 
 // API functions
 const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
@@ -189,6 +193,7 @@ const SQBotEditor = () => {
         redirectTo?: string;
     };
     const navigation = useNavigation();
+    const navigate = useNavigate();
 
     // Handle redirect if needed
     useEffect(() => {
@@ -213,6 +218,7 @@ const SQBotEditor = () => {
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const saveButtonRef = useRef<SaveButtonRef>(null);
+    const [modalOpen, setModalOpen] = useState(false);
 
     // Check if we're in a loading state
     const isLoading = navigation.state === "loading";
@@ -381,6 +387,32 @@ const SQBotEditor = () => {
         debouncedSave(updatedPack);
     };
 
+    // Handle keyboard shortcut
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Check for Cmd+K (Mac) or Ctrl+K (Windows/Linux)
+            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+                e.preventDefault();
+                setModalOpen(true);
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
+    // Handle selecting a playlist from the modal
+    const handleSelectPlaylist = (playlistId: string) => {
+        if (playlistId === quizPack.id) {
+            setModalOpen(false);
+            return;
+        }
+
+        // Navigate to the selected playlist
+        navigate(`/editor/${playlistId}`);
+        setModalOpen(false);
+    };
+
     // Show loading state if needed
     if (isLoading) {
         return (
@@ -439,6 +471,17 @@ const SQBotEditor = () => {
                                 </Button>
                             </div>
                         </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-1 cursor-pointer"
+                            onClick={() => setModalOpen(true)}
+                        >
+                            <div className="relative flex items-center justify-center h-4 w-4">
+                                <FolderOpen className="h-4 w-4" />
+                            </div>
+                            Browse
+                        </Button>
                         <SaveButton
                             minLoadingDuration={500}
                             onSave={async () => {
@@ -449,6 +492,13 @@ const SQBotEditor = () => {
                     </div>
                 </div>
             </header>
+
+            {/* Playlist Browse Modal */}
+            <PlaylistListModal
+                open={modalOpen}
+                onOpenChange={setModalOpen}
+                onSelectPlaylist={handleSelectPlaylist}
+            />
 
             {/* Main Content */}
             <main className="flex-1 container mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
