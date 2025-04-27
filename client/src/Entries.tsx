@@ -27,37 +27,6 @@ import { GripVertical, Plus, Trash } from "lucide-react";
 import { QuizEntry, QuizPack } from "./types";
 import { Button } from "./components/ui/button";
 
-// Example quiz entry data based on your SQBot project
-const initialEntries = [
-    {
-        id: "1",
-        performer: "結束バンド (결속 밴드)",
-        canonicalName: "비밀 기지",
-        possibleAnswers: ["Himitsu Kichi", "ひみつ基地"],
-        ytVideoId: "ztF1ru7LEzs",
-        songStart: 39,
-        playDuration: 50,
-    },
-    {
-        id: "2",
-        performer: "結束バンド (결속 밴드)",
-        canonicalName: "그 밴드",
-        possibleAnswers: ["That Band"],
-        ytVideoId: "nxnxnxnxnx",
-        songStart: 39,
-        playDuration: 50,
-    },
-    {
-        id: "3",
-        performer: "YOASOBI",
-        canonicalName: "Idol",
-        possibleAnswers: ["아이돌", "アイドル"],
-        ytVideoId: "ZRtdQ81jPUQ",
-        songStart: 60,
-        playDuration: 30,
-    },
-];
-
 // Sortable item component
 const SortableEntry = (
     { entry, index, selectedEntryIndex, onSelect, onDelete }: {
@@ -78,7 +47,15 @@ const SortableEntry = (
     const scrollIntoViewRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (index === selectedEntryIndex) {
-            scrollIntoViewRef.current?.scrollIntoView();
+            let current = scrollIntoViewRef.current;
+            if (current === null) {
+                return;
+            }
+            if ("scrollIntoViewIfNeeded" in current) {
+                (current as any).scrollIntoViewIfNeeded(true);
+            } else {
+                current.scrollIntoView({ block: "nearest" });
+            }
         }
     }, [selectedEntryIndex]);
 
