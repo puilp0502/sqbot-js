@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
-    BrowserRouter,
+    createBrowserRouter,
     Navigate,
     Outlet,
-    Route,
-    Routes,
+    RouterProvider,
     useLocation,
 } from "react-router-dom";
 import Login from "./Login";
@@ -26,54 +25,75 @@ const ProtectedRoute: React.FC = () => {
     return <Outlet />; // Render the child route (Editor)
 };
 
+// Create an auth checker function for route objects
+const checkAuth = () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+        return redirect("/login");
+    }
+    return null;
+};
+
+// Redirect utility function
+const redirect = (path: string) => {
+    return {
+        status: 302,
+        headers: {
+            Location: path,
+        },
+    };
+};
+
+// Define the router with routes
+const router = createBrowserRouter([
+    {
+        path: "/login",
+        element: (
+            <Login
+                onLoginSuccess={() => {
+                    /* Placeholder, navigation handled by Login */
+                }}
+            />
+        ),
+    },
+    {
+        element: <ProtectedRoute />,
+        children: [
+            {
+                path: "/editor/:packId",
+                element: <Editor />,
+                // Ready for future loader implementation
+                // loader: ({ params }) => {
+                //     return fetchPackData(params.packId);
+                // },
+            },
+            // Add other protected routes here
+        ],
+    },
+    {
+        path: "/login-redirect",
+        loader: () => {
+            const token = localStorage.getItem("authToken");
+            return token ? redirect("/") : redirect("/login");
+        },
+        element: null, // The element won't render as the loader will redirect
+    },
+    // Catch-all route redirecting to the login page
+    {
+        path: "*",
+        loader: () => redirect("/login"),
+        element: null,
+    },
+]);
+
 function AppWrapper() {
-    // We don't need a separate isAuthenticated state, we can just check localStorage
-    // directly in the ProtectedRoute and when deciding initial route.
-    // const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('authToken'));
-
-    // This function will be passed to the Login component
-    // const handleLoginSuccess = () => {
-    // setIsAuthenticated(true);
-    // No need to manually set state, ProtectedRoute handles redirection based on token
-    // };
-
     // Function to handle logout (optional, but good practice)
     const handleLogout = () => {
         localStorage.removeItem("authToken");
-        // setIsAuthenticated(false);
-        // Force a re-render or navigate to login if needed,
-        // but often letting ProtectedRoute handle it on next navigation is sufficient.
         window.location.reload(); // Simple way to force re-check
     };
 
-    return (
-        <>
-            <Routes>
-                <Route
-                    path="/login"
-                    element={
-                        <Login
-                            onLoginSuccess={() => {
-                                /* Placeholder, navigation handled by Login */
-                            }}
-                        />
-                    }
-                />
-                <Route element={<ProtectedRoute />}>
-                    {/* Routes inside here require authentication */}
-                    <Route path="/editor/:packId" element={<Editor />} />
-                    {/* Add other protected routes here */}
-                </Route>
-                {/* Optional: Redirect authenticated users from /login to / */}
-                <Route
-                    path="/login-redirect"
-                    element={localStorage.getItem("authToken")
-                        ? <Navigate to="/" replace />
-                        : <Navigate to="/login" replace />}
-                />
-            </Routes>
-        </>
-    );
+    return <RouterProvider router={router} />;
 }
 
 export default AppWrapper;
