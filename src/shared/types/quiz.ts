@@ -16,9 +16,29 @@ interface QuizPack {
   id: string; // UUID
   name: string;
   description: string;
+  tags: string[];
+  playCount: number;
   createdAt: Date;
   updatedAt: Date;
   entries: QuizEntry[];
+}
+
+// Search parameters for quiz packs
+interface QuizPackSearchParams {
+  tags?: string[];
+  searchTerm?: string; // For searching in name/description
+  orderBy?: "name" | "createdAt" | "updatedAt" | "playCount";
+  orderDirection?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}
+
+// Search results with pagination info
+interface QuizPackSearchResults {
+  quizPacks: QuizPack[];
+  total: number;
+  offset: number;
+  limit: number;
 }
 
 // Interface for the datastore
@@ -31,7 +51,19 @@ interface MusicQuizDatastore {
 
   // Update quiz pack
   updateQuizPack(quizPackId: string, quizPack: QuizPack): Promise<undefined>;
+
+  // Search for quiz packs with filtering, sorting and pagination
+  searchQuizPacks(params: QuizPackSearchParams): Promise<QuizPackSearchResults>;
+
+  // Increment play count for a quiz pack
+  incrementPlayCount(quizPackId: string): Promise<boolean>;
 }
 
 // Export the interfaces
-export { QuizEntry, QuizPack, MusicQuizDatastore };
+export {
+  QuizEntry,
+  QuizPack,
+  MusicQuizDatastore,
+  QuizPackSearchParams,
+  QuizPackSearchResults,
+};

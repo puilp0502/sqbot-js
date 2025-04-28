@@ -11,6 +11,8 @@ const createSampleQuizPack = (id: string): QuizPack => ({
   description: "A pack created for testing",
   createdAt: new Date(),
   updatedAt: new Date(),
+  playCount: 0,
+  tags: [],
   entries: [
     {
       id: uuidv4(),
