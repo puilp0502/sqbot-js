@@ -6,6 +6,7 @@ import {
   QuizPackSearchParams,
   QuizPackSearchResults,
 } from "../types/quiz";
+import crypto from "crypto";
 
 export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
   #db: Database;
@@ -25,6 +26,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
+        play_count INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -70,6 +72,12 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
   async getQuizPack(quizPackId: string): Promise<QuizPack | null> {
     const quizPackQuery = "SELECT * FROM quiz_packs WHERE id = ?";
     const entriesQuery = "SELECT * FROM quiz_entries WHERE quiz_pack_id = ?";
+    const tagsQuery = `
+      SELECT t.name 
+      FROM tags t
+      JOIN quiz_pack_tags qpt ON t.id = qpt.tag_id
+      WHERE qpt.quiz_pack_id = ?
+    `;
 
     try {
       const quizPack = await new Promise<any>((resolve, reject) => {
@@ -88,7 +96,24 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         });
       });
 
-      return this.#rowToQuizPack(quizPack, entries.map(this.#rowToQuizEntry));
+      // Get tags for this quiz pack
+      const tags = await new Promise<string[]>((resolve, reject) => {
+        this.#db.all(tagsQuery, [quizPackId], (err, rows: any[]) => {
+          if (err) reject(err);
+          else resolve(rows.map((row) => row.name));
+        });
+      });
+
+      return {
+        id: quizPack.id,
+        name: quizPack.name,
+        description: quizPack.description,
+        playCount: quizPack.play_count || 0,
+        createdAt: new Date(quizPack.created_at),
+        updatedAt: new Date(quizPack.updated_at),
+        tags: tags,
+        entries: entries.map(this.#rowToQuizEntry),
+      };
     } catch (error) {
       console.error("Error fetching quiz pack:", error);
       return null;
@@ -96,15 +121,37 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
   }
 
   async listQuizPacks(): Promise<QuizPack[]> {
-    const query = "SELECT * FROM quiz_packs";
+    const packsQuery = "SELECT * FROM quiz_packs";
+    const tagsQuery = `
+      SELECT qpt.quiz_pack_id, t.name 
+      FROM tags t
+      JOIN quiz_pack_tags qpt ON t.id = qpt.tag_id
+    `;
 
     try {
       const quizPacks = await new Promise<any[]>((resolve, reject) => {
-        this.#db.all(query, (err, rows) => {
+        this.#db.all(packsQuery, (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
         });
       });
+
+      // Get all tags for all quiz packs in one query
+      const allTags = await new Promise<any[]>((resolve, reject) => {
+        this.#db.all(tagsQuery, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+
+      // Group tags by quiz_pack_id
+      const tagsByPackId: Record<string, string[]> = {};
+      for (const row of allTags) {
+        if (!tagsByPackId[row.quiz_pack_id]) {
+          tagsByPackId[row.quiz_pack_id] = [];
+        }
+        tagsByPackId[row.quiz_pack_id].push(row.name);
+      }
 
       const result: QuizPack[] = [];
       for (const pack of quizPacks) {
@@ -119,9 +166,16 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
           );
         });
 
-        result.push(
-          this.#rowToQuizPack(pack, entries.map(this.#rowToQuizEntry))
-        );
+        result.push({
+          id: pack.id,
+          name: pack.name,
+          description: pack.description,
+          playCount: pack.play_count || 0,
+          createdAt: new Date(pack.created_at),
+          updatedAt: new Date(pack.updated_at),
+          tags: tagsByPackId[pack.id] || [],
+          entries: entries.map(this.#rowToQuizEntry),
+        });
       }
 
       return result;
@@ -136,24 +190,21 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
   ): Promise<QuizPackSearchResults> {
     try {
       let baseQuery = `
-        SELECT DISTINCT qp.id, qp.name, qp.description, qp.play_count, qp.created_at, qp.updated_at
+        SELECT qp.id, qp.name, qp.description, qp.play_count, qp.created_at, qp.updated_at, COUNT(t.id) as matching_tag_count
         FROM quiz_packs qp
+        LEFT OUTER JOIN quiz_pack_tags qpt ON qp.id = qpt.quiz_pack_id
+        LEFT OUTER JOIN tags t ON qpt.tag_id = t.id
       `;
 
       const queryParams: any[] = [];
       const whereConditions: string[] = [];
 
-      // Join with tags table if tag filtering is requested
-      if (params.tags && params.tags.length > 0) {
-        baseQuery += `
-          JOIN quiz_pack_tags qpt ON qp.id = qpt.quiz_pack_id
-          JOIN tags t ON qpt.tag_id = t.id
-        `;
-
-        const tagPlaceholders = params.tags.map(() => "?").join(", ");
-        whereConditions.push(`t.name IN (${tagPlaceholders})`);
-        queryParams.push(...params.tags);
-      }
+      // Add conditions for tags
+      let filterTags = params.tags || [];
+      whereConditions.push(
+        `t.name IN (${filterTags.map(() => "?").join(", ")})`
+      );
+      filterTags.forEach((tag) => queryParams.push(tag));
 
       // Add search term condition for name and description
       if (params.searchTerm) {
@@ -168,16 +219,18 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         whereClause = `WHERE ${whereConditions.join(" AND ")}`;
       }
 
-      // Handle GROUP BY for when we join with tags
-      let groupByClause = "";
-      if (params.tags && params.tags.length > 0) {
-        groupByClause = "GROUP BY qp.id";
+      let groupbyClause = "GROUP BY qp.id";
+
+      // Build the HAVING clause
+      let havingClause = "";
+      if (filterTags.length > 0) {
+        havingClause = `HAVING matching_tag_count >= ${filterTags.length}`;
       }
 
       // Order clause
-      const orderField = params.orderBy || "name";
-      const orderDirection = params.orderDirection || "asc";
-      const orderClause = `ORDER BY ${this.#getSQLFieldName(
+      const orderField = params.orderBy || "playCount";
+      const orderDirection = params.orderDirection || "desc";
+      const orderClause = `ORDER BY qp.${this.#getSQLFieldName(
         orderField
       )} ${orderDirection.toUpperCase()}`;
 
@@ -186,28 +239,20 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
       const offset = params.offset || 0;
       const paginationClause = `LIMIT ${limit} OFFSET ${offset}`;
 
-      // Build count query - need total without pagination
-      const countQuery = `
-        SELECT COUNT(DISTINCT qp.id) as total
-        FROM quiz_packs qp
-        ${
-          params.tags && params.tags.length > 0
-            ? `
-          JOIN quiz_pack_tags qpt ON qp.id = qpt.quiz_pack_id
-          JOIN tags t ON qpt.tag_id = t.id
-        `
-            : ""
-        }
-        ${whereClause}
-      `;
-
       // Build data query
       const dataQuery = `
         ${baseQuery}
         ${whereClause}
-        ${groupByClause}
+        ${groupbyClause}
+        ${havingClause}
         ${orderClause}
         ${paginationClause}
+      `;
+
+      // Build count query - need total without pagination
+      const countQuery = `
+        SELECT COUNT(DISTINCT qp.id) as total
+        FROM (${dataQuery}) AS qp
       `;
 
       // Get total count
@@ -220,6 +265,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
 
       // Get the quiz packs
       const quizPacks = await new Promise<any[]>((resolve, reject) => {
+        console.log(dataQuery);
         this.#db.all(dataQuery, queryParams, (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -301,6 +347,25 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
     } catch (error) {
       console.error("Error incrementing play count:", error);
       return false;
+    }
+  }
+
+  async getAllTags(): Promise<string[]> {
+    try {
+      const tags = await new Promise<string[]>((resolve, reject) => {
+        this.#db.all(
+          "SELECT name FROM tags ORDER BY name",
+          (err, rows: any[]) => {
+            if (err) reject(err);
+            else resolve(rows.map((row) => row.name));
+          }
+        );
+      });
+
+      return tags;
+    } catch (error) {
+      console.error("Error fetching all tags:", error);
+      return [];
     }
   }
 
@@ -472,19 +537,6 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
       default:
         return jsField;
     }
-  }
-
-  #rowToQuizPack(row: any, entries: QuizEntry[]): QuizPack {
-    return {
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
-      playCount: row.play_count || 0,
-      tags: row.tags || [],
-      entries,
-    };
   }
 
   // Method to close the database connection

@@ -57,6 +57,9 @@ interface MusicQuizDatastore {
 
   // Increment play count for a quiz pack
   incrementPlayCount(quizPackId: string): Promise<boolean>;
+
+  // Get all available tags in the system
+  getAllTags(): Promise<string[]>;
 }
 
 // Export the interfaces

@@ -2,7 +2,6 @@ import express, { Router } from "express";
 import { Request, Response } from "express";
 import { datastore } from "../datastore";
 import { QuizPack, QuizPackSearchParams } from "../../shared/types/quiz";
-import { MusicQuizSQLiteDatastore } from "../../shared/database/sqlite";
 
 const router = Router();
 
@@ -16,20 +15,7 @@ interface PackParams {
  */
 router.get("/tags", async (req: Request, res: Response) => {
   try {
-    // Since we need direct database access for this, we need to cast to the SQLite implementation
-    const sqliteDatastore = datastore as MusicQuizSQLiteDatastore;
-
-    const tags = await new Promise<string[]>((resolve, reject) => {
-      // @ts-ignore - Accessing private DB property
-      sqliteDatastore["#db"].all(
-        "SELECT name FROM tags ORDER BY name",
-        (err: Error, rows: any[]) => {
-          if (err) reject(err);
-          else resolve(rows.map((row) => row.name));
-        }
-      );
-    });
-
+    const tags = await datastore.getAllTags();
     res.json(tags);
   } catch (error) {
     console.error("Error fetching tags:", error);
