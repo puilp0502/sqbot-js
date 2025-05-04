@@ -1,9 +1,11 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response, NextFunction, Application } from "express";
 import cors from "cors";
 import { quizPackRouter } from "./routes/quizPack";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import { MusicQuizDatastore } from "../shared/types/quiz";
+import { datastore as defaultDatastore } from "./datastore";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -79,15 +81,29 @@ const basicAuth = (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-// Create Express application
-const app = express();
+/**
+ * Create an Express application with the given datastore
+ * This allows for dependency injection, particularly useful for testing
+ */
+export function createApp(datastore: MusicQuizDatastore = defaultDatastore): Application {
+  // Create Express application
+  const app = express();
+  
+  // Store datastore in app.locals for global access
+  app.locals.datastore = datastore;
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+  // Middleware
+  app.use(cors());
+  app.use(express.json({ limit: "10mb" }));
 
-// Use routes - Apply auth middleware ONLY to /api routes
-app.use("/api", basicAuth, quizPackRouter);
+  // Use routes - Apply auth middleware ONLY to /api routes
+  app.use("/api", basicAuth, quizPackRouter);
+  
+  return app;
+}
+
+// Use default datastore for the main app instance
+const app = createApp();
 
 // Define port
 const PORT = process.env.PORT || 3001;

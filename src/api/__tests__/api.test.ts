@@ -1,8 +1,9 @@
-import request from "supertest";
-import { app } from "../index";
-import { datastore } from "../datastore";
+import request, { SuperTest, Test } from "supertest";
+import { createApp } from "../index";
 import { v4 as uuidv4 } from "uuid";
-import { QuizPack } from "../../shared/types/quiz";
+import { QuizPack, MusicQuizDatastore } from "../../shared/types/quiz";
+import { MusicQuizSQLiteDatastore } from "../../shared/database/sqlite";
+import { Application } from "express";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -30,44 +31,74 @@ const createSampleQuizPack = (id: string, options = {}): QuizPack => ({
   ...options,
 });
 
-// Helper to add a quiz pack to the database
-const createTestQuizPack = async (
-  id: string = uuidv4(),
-  options = {}
-): Promise<QuizPack> => {
-  const quizPack = createSampleQuizPack(id, options);
-  await datastore.updateQuizPack(id, quizPack);
-  return quizPack;
+type TestEnvironment = {
+  datastore: MusicQuizDatastore;
+  app: Application;
+  createTestQuizPack: (id: string, options?: any) => Promise<QuizPack>;
+  authRequest: (method: string, url: string) => request.Test;
 };
 
-// Basic auth credentials for tests
-const AUTH_CREDENTIALS = Buffer.from(
-  `${process.env.ADMIN_USERNAME}:${process.env.ADMIN_PASSWORD}`
-).toString("base64");
+/**
+ * Create a test environment with isolated datastore and app
+ */
+function createTestEnvironment(): TestEnvironment {
+  // Create a fresh in-memory database for this test
+  const datastore = new MusicQuizSQLiteDatastore(":memory:");
 
-// Helper to create an authenticated request
-const authRequest = (method: string, url: string) => {
-  const req = request(app);
+  // Create an app with this datastore
+  const app = createApp(datastore);
 
-  switch (method.toLowerCase()) {
-    case "get":
-      return req.get(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
-    case "post":
-      return req.post(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
-    case "put":
-      return req.put(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
-    case "delete":
-      return req.delete(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
-    case "patch":
-      return req.patch(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
-    default:
-      throw new Error(`Unsupported HTTP method: ${method}`);
-  }
-};
+  // Helper to add a quiz pack to the database
+  const createTestQuizPack = async (
+    id: string = uuidv4(),
+    options = {}
+  ): Promise<QuizPack> => {
+    const quizPack = createSampleQuizPack(id, options);
+    await datastore.updateQuizPack(id, quizPack);
+    return quizPack;
+  };
+
+  // Basic auth credentials for tests
+  const AUTH_CREDENTIALS = Buffer.from(
+    `${process.env.ADMIN_USERNAME}:${process.env.ADMIN_PASSWORD}`
+  ).toString("base64");
+
+  // Helper to create an authenticated request
+  const authRequest = (method: string, url: string) => {
+    const req = request(app);
+
+    switch (method.toLowerCase()) {
+      case "get":
+        return req.get(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+      case "post":
+        return req.post(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+      case "put":
+        return req.put(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+      case "delete":
+        return req
+          .delete(url)
+          .set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+      case "patch":
+        return req.patch(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+      default:
+        throw new Error(`Unsupported HTTP method: ${method}`);
+    }
+  };
+
+  return {
+    datastore,
+    app,
+    createTestQuizPack,
+    authRequest,
+  };
+}
 
 describe("Quiz Pack API", () => {
   describe("GET /api/pack/:pack_id", () => {
     it("should return 404 if quiz pack not found", async () => {
+      // Create isolated test environment
+      const { authRequest } = createTestEnvironment();
+
       const response = await authRequest("get", "/api/pack/nonexistent-pack");
 
       expect(response.status).toBe(404);
@@ -75,6 +106,9 @@ describe("Quiz Pack API", () => {
     });
 
     it("should return quiz pack data if found", async () => {
+      // Create isolated test environment
+      const { authRequest, createTestQuizPack } = createTestEnvironment();
+
       // Add test quiz pack to database
       const quizPack = await createTestQuizPack("test-pack-1");
 
@@ -88,6 +122,9 @@ describe("Quiz Pack API", () => {
     });
 
     it("should return 401 without authentication", async () => {
+      // Create isolated test environment
+      const { app, createTestQuizPack } = createTestEnvironment();
+
       const quizPack = await createTestQuizPack("test-pack-auth");
 
       const response = await request(app).get(`/api/pack/${quizPack.id}`);
@@ -98,6 +135,9 @@ describe("Quiz Pack API", () => {
 
   describe("PUT /api/pack/:pack_id", () => {
     it("should return 404 if quiz pack to update not found", async () => {
+      // Create isolated test environment
+      const { authRequest } = createTestEnvironment();
+
       const nonExistentId = "nonexistent-pack";
       const quizPack = createSampleQuizPack(nonExistentId);
 
@@ -111,6 +151,9 @@ describe("Quiz Pack API", () => {
     });
 
     it("should return 400 if pack ID in URL doesn't match request body", async () => {
+      // Create isolated test environment
+      const { authRequest, createTestQuizPack } = createTestEnvironment();
+
       // First create a quiz pack
       const quizPack = await createTestQuizPack("test-pack-2");
 
@@ -130,6 +173,9 @@ describe("Quiz Pack API", () => {
     });
 
     it("should update quiz pack successfully", async () => {
+      // Create isolated test environment
+      const { authRequest, createTestQuizPack } = createTestEnvironment();
+
       // First create a quiz pack
       const quizPack = await createTestQuizPack("test-pack-3");
 
@@ -168,6 +214,9 @@ describe("Quiz Pack API", () => {
 
   describe("Tags API", () => {
     it("should add tags to a quiz pack", async () => {
+      // Create isolated test environment
+      const { authRequest, createTestQuizPack } = createTestEnvironment();
+
       // Create a quiz pack first
       const quizPack = await createTestQuizPack("test-pack-tags");
 
@@ -184,11 +233,13 @@ describe("Quiz Pack API", () => {
 
       // Verify tags were added by fetching the pack
       const getResponse = await authRequest("get", `/api/pack/${quizPack.id}`);
-      console.log(getResponse.body);
       expect(getResponse.body.tags).toEqual(expect.arrayContaining(tagsToAdd));
     });
 
     it("should remove a tag from a quiz pack", async () => {
+      // Create isolated test environment
+      const { authRequest, createTestQuizPack } = createTestEnvironment();
+
       // Create a quiz pack with tags
       const quizPack = await createTestQuizPack("test-pack-tag-removal", {
         tags: ["J-Pop", "K-Pop", "2010"],
@@ -216,6 +267,9 @@ describe("Quiz Pack API", () => {
     });
 
     it("should get all available tags", async () => {
+      // Create isolated test environment
+      const { authRequest, createTestQuizPack } = createTestEnvironment();
+
       // Create quiz packs with various tags
       await createTestQuizPack("test-pack-tags-1", {
         tags: ["J-Pop", "2010", "Anime"],
@@ -244,7 +298,14 @@ describe("Quiz Pack API", () => {
   });
 
   describe("Search API", () => {
-    beforeAll(async () => {
+    // Create a shared test environment for all search tests
+    let testEnv: TestEnvironment;
+
+    beforeEach(async () => {
+      // Create an isolated test environment
+      testEnv = createTestEnvironment();
+      const { createTestQuizPack } = testEnv;
+
       // Create multiple quiz packs with different properties for testing search
       await createTestQuizPack("search-pack-1", {
         name: "Japanese Pop Songs",
@@ -269,7 +330,8 @@ describe("Quiz Pack API", () => {
     });
 
     it("should search by text term", async () => {
-      const response = await authRequest("get", "/api/search?q=anime");
+      const { authRequest } = testEnv;
+      const response = await authRequest("get", "/api/search?q=Anime");
 
       expect(response.status).toBe(200);
       expect(response.body.quizPacks).toHaveLength(1);
@@ -277,6 +339,7 @@ describe("Quiz Pack API", () => {
     });
 
     it("should search by tags", async () => {
+      const { authRequest } = testEnv;
       const response = await authRequest("get", "/api/search?tags=J-Pop");
 
       expect(response.status).toBe(200);
@@ -287,6 +350,7 @@ describe("Quiz Pack API", () => {
     });
 
     it("should order results by specified field", async () => {
+      const { authRequest } = testEnv;
       const response = await authRequest(
         "get",
         "/api/search?orderBy=playCount&orderDirection=desc"
@@ -301,6 +365,8 @@ describe("Quiz Pack API", () => {
     });
 
     it("should support pagination", async () => {
+      const { authRequest } = testEnv;
+
       // Get first page with 1 item
       const page1 = await authRequest("get", "/api/search?limit=1&offset=0");
 
@@ -323,6 +389,7 @@ describe("Quiz Pack API", () => {
     });
 
     it("should combine search criteria", async () => {
+      const { authRequest } = testEnv;
       const response = await authRequest(
         "get",
         "/api/search?tags=J-Pop&q=pop%20song"

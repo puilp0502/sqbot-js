@@ -1,9 +1,14 @@
-import express, { Router } from "express";
-import { Request, Response } from "express";
-import { datastore } from "../datastore";
-import { QuizPack, QuizPackSearchParams } from "../../shared/types/quiz";
+import express, { Router, Request, Response, Application } from "express";
+import { QuizPack, QuizPackSearchParams, MusicQuizDatastore } from "../../shared/types/quiz";
 
 const router = Router();
+
+/**
+ * Helper function to get the datastore from the Express application
+ */
+function getDatastore(req: Request): MusicQuizDatastore {
+  return req.app.locals.datastore as MusicQuizDatastore;
+}
 
 interface PackParams {
   pack_id: string;
@@ -15,6 +20,7 @@ interface PackParams {
  */
 router.get("/tags", async (req: Request, res: Response) => {
   try {
+    const datastore = getDatastore(req);
     const tags = await datastore.getAllTags();
     res.json(tags);
   } catch (error) {
@@ -55,6 +61,7 @@ router.get("/search", async (req: Request, res: Response) => {
       }
     }
 
+    const datastore = getDatastore(req);
     const results = await datastore.searchQuizPacks(searchParams);
     res.json(results);
   } catch (error) {
@@ -70,7 +77,7 @@ router.get("/search", async (req: Request, res: Response) => {
 router.get("/pack/:pack_id", async (req: Request, res: Response) => {
   try {
     const { pack_id } = req.params;
-
+    const datastore = getDatastore(req);
     const quizPack = await datastore.getQuizPack(pack_id);
 
     if (!quizPack) {
@@ -100,6 +107,7 @@ router.post("/pack/:pack_id/tags", async (req: Request, res: Response) => {
     }
 
     // Get the quiz pack
+    const datastore = getDatastore(req);
     const quizPack = await datastore.getQuizPack(pack_id);
     if (!quizPack) {
       res.status(404).json({ error: "Quiz pack not found" });
@@ -131,6 +139,7 @@ router.delete(
       const { pack_id, tag_name } = req.params;
 
       // Get the quiz pack
+      const datastore = getDatastore(req);
       const quizPack = await datastore.getQuizPack(pack_id);
       if (!quizPack) {
         res.status(404).json({ error: "Quiz pack not found" });
@@ -161,6 +170,7 @@ router.put("/pack/:pack_id", async (req: Request, res: Response) => {
     const quizPackData = req.body as QuizPack;
 
     // Verify the pack exists first
+    const datastore = getDatastore(req);
     const existingPack = await datastore.getQuizPack(pack_id);
     if (!existingPack) {
       res.status(404).json({ error: "Quiz pack not found" });

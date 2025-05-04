@@ -201,10 +201,12 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
 
       // Add conditions for tags
       let filterTags = params.tags || [];
-      whereConditions.push(
-        `t.name IN (${filterTags.map(() => "?").join(", ")})`
-      );
-      filterTags.forEach((tag) => queryParams.push(tag));
+      if (filterTags.length > 0) {
+        whereConditions.push(
+          `t.name IN (${filterTags.map(() => "?").join(", ")})`
+        );
+        filterTags.forEach((tag) => queryParams.push(tag));
+      }
 
       // Add search term condition for name and description
       if (params.searchTerm) {
@@ -246,13 +248,17 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         ${groupbyClause}
         ${havingClause}
         ${orderClause}
-        ${paginationClause}
       `;
 
       // Build count query - need total without pagination
       const countQuery = `
         SELECT COUNT(DISTINCT qp.id) as total
         FROM (${dataQuery}) AS qp
+      `;
+
+      const detailQuery = `
+        ${dataQuery}
+        ${paginationClause}
       `;
 
       // Get total count
@@ -265,8 +271,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
 
       // Get the quiz packs
       const quizPacks = await new Promise<any[]>((resolve, reject) => {
-        console.log(dataQuery);
-        this.#db.all(dataQuery, queryParams, (err, rows) => {
+        this.#db.all(detailQuery, queryParams, (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });
