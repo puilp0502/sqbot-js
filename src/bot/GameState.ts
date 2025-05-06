@@ -24,7 +24,18 @@ export class GameState {
     private readonly pack: QuizPack,
     private readonly textChannel: TextChannel,
     private readonly ytDlp: YtDlp
-  ) {}
+  ) {
+    this.guildId = guildId;
+    this.textChannel = textChannel;
+    this.ytDlp = ytDlp;
+
+    // Randomize the quiz pack entries order
+    this.pack = {
+      ...pack,
+      entries: [...pack.entries].sort(() => Math.random() - 0.5),
+    };
+    console.log(this.pack);
+  }
 
   // Computed property
   private get currentEntry(): QuizEntry | undefined {
@@ -82,12 +93,22 @@ export class GameState {
   private async playCurrentEntry(): Promise<void> {
     if (!this.currentEntry || !this.player) return;
 
-    const stream = await this.createAudioStream(this.currentEntry);
-    const resource = createAudioResource(stream);
-    this.player.play(resource);
-
     const playDuration =
       this.currentEntry.playDuration > 0 ? this.currentEntry.playDuration : 60; // Default to 60 seconds max
+    try {
+      const stream = await this.createAudioStream(this.currentEntry);
+      const resource = createAudioResource(stream);
+      this.player.play(resource);
+    } catch (error) {
+      console.error(error);
+      await this.textChannel.send(
+        `ℹ️ 재생할 수 없는 노래를 건너뜁니다. (Video ID: ${this.currentEntry.ytVideoId})`
+      );
+      this.player.stop();
+      this.currentRound++;
+      this.playNextRound();
+      return;
+    }
 
     this.roundTimeout = setTimeout(
       () => this.timeoutCurrentRound(),
