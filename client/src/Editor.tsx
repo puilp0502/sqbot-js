@@ -185,7 +185,7 @@ const SQBotEditor = () => {
         try {
             setIsSaving(true);
 
-            // Instead of using the form submission approach, call the API directly
+            // call the API directly
             await updateQuizPack(localPack.id, localPack);
 
             // When submitting through the save button, show success
@@ -364,6 +364,9 @@ const SQBotEditor = () => {
             if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault();
                 setModalOpen(true);
+            } else if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+                e.preventDefault();
+                saveButtonRef.current?.startSave();
             }
         };
 
@@ -703,8 +706,8 @@ const SQBotEditor = () => {
                                         >
                                         </textarea>
                                     </div>
-                                    
-                                    <TagEditor 
+
+                                    <TagEditor
                                         quizPack={localPack}
                                         onChange={(updatedPack) => {
                                             setLocalPack(updatedPack);
