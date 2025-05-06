@@ -13,7 +13,7 @@ import { Button } from "./components/ui/button";
 import { Label } from "./components/ui/label";
 
 interface LoginProps {
-    onLoginSuccess: () => void;
+    onLoginSuccess?: () => void;
 }
 
 function Login({ onLoginSuccess }: LoginProps) {
@@ -71,8 +71,12 @@ function Login({ onLoginSuccess }: LoginProps) {
         localStorage.setItem("authToken", basicAuthToken);
 
         console.log("Credentials stored locally.");
-        onLoginSuccess(); // Notify App component
-        navigate("/editor/pack1"); // Redirect to the main page (or editor)
+        // Call onLoginSuccess if provided
+        if (onLoginSuccess) {
+            onLoginSuccess();
+        }
+        // Use React Router's navigate for redirection
+        navigate("/"); // Redirect to the home page (which will redirect to editor)
     };
 
     return (

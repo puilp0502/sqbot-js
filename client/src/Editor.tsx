@@ -36,15 +36,18 @@ import { TimeRangeInput } from "./TimeInput";
 import { SaveButton, SaveButtonRef } from "./SaveButton";
 import { useDebounce } from "@/lib/hooks";
 import {
+    ActionFunctionArgs,
     LoaderFunctionArgs,
+    redirect,
+    useActionData,
     useLoaderData,
     useNavigate,
     useNavigation,
+    useSubmit,
 } from "react-router-dom";
 import PlaylistListModal from "./PlaylistListModal";
 
-// API functions
-const API_BASE_URL = "http://localhost:3001/api"; // Adjust based on your setup
+import { createQuizPack, fetchQuizPack, updateQuizPack } from "./lib/api";
 
 // Loader function for React Router
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -53,160 +56,148 @@ export async function loader({ params }: LoaderFunctionArgs) {
         throw new Response("Pack ID not found", { status: 404 });
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-        // Redirect to login if no token is found
-        return { redirectTo: "/login" };
-    }
-
     try {
-        const response = await fetch(`${API_BASE_URL}/pack/${packId}`, {
-            headers: {
-                "Authorization": token,
-            },
-        });
-
-        if (response.status === 401) {
-            // Handle unauthorized access
-            localStorage.removeItem("authToken"); // Clear invalid token
-            return { redirectTo: "/login" };
-        }
-
-        // Specifically handle 404 Not Found responses
-        if (response.status === 404) {
-            throw new Response(`Quiz pack '${packId}' not found`, {
-                status: 404,
-            });
-        }
-
-        if (!response.ok) {
-            throw new Response(
-                `Failed to fetch quiz pack: ${response.statusText}`,
-                {
-                    status: response.status,
-                },
-            );
-        }
-
-        const quizPack = await response.json();
-        return { quizPack };
+        // Fetch the existing quiz pack
+        const quizPack = await fetchQuizPack(packId);
+        return quizPack;
     } catch (error) {
-        // Re-throw the error if it's already a Response object (e.g., our 404 Response)
         if (error instanceof Response) {
+            if (error.status === 401) {
+                return redirect("/login");
+            }
             throw error;
         }
 
         console.error("Loader error:", error);
         throw new Response(
             error instanceof Error ? error.message : "Failed to load quiz pack",
-            {
-                status: 500,
-            },
+            { status: 500 },
         );
     }
 }
 
-async function fetchQuizPack(packId: string): Promise<QuizPack> {
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-        // Handle appropriately - maybe redirect to login or throw a specific error
-        throw new Error("Authentication token not found. Please log in.");
+// Action function for form submission
+export async function action({ request, params }: ActionFunctionArgs) {
+    const packId = params.packId;
+    if (!packId) {
+        throw new Response("Pack ID not found", { status: 404 });
     }
-    const response = await fetch(`${API_BASE_URL}/${packId}`, {
-        headers: {
-            "Authorization": token,
-        },
-    });
-    if (response.status === 401) {
-        // Handle unauthorized access, e.g., redirect to login
-        localStorage.removeItem("authToken"); // Clear invalid token
-        window.location.href = "/login"; // Force redirect
-        throw new Error("Unauthorized access. Redirecting to login.");
-    }
-    if (!response.ok) {
-        throw new Error("Failed to fetch quiz pack");
-    }
-    return response.json();
-}
 
-async function updateQuizPack(packId: string, pack: QuizPack): Promise<void> {
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-        throw new Error("Authentication token not found. Please log in.");
-    }
-    const response = await fetch(`${API_BASE_URL}/${packId}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": token, // Add the Authorization header
-        },
-        body: JSON.stringify(pack),
-    });
-    if (response.status === 401) {
-        localStorage.removeItem("authToken"); // Clear invalid token
-        window.location.href = "/login"; // Force redirect
-        throw new Error("Unauthorized access. Redirecting to login.");
-    }
-    if (!response.ok) {
-        throw new Error("Failed to update quiz pack");
+    const formData = await request.formData();
+    const intent = formData.get("intent")?.toString();
+
+    try {
+        // Handle different types of form submissions
+        if (intent === "save") {
+            const packData = JSON.parse(formData.get("packData") as string);
+
+            // Update existing pack
+            await updateQuizPack(packId, packData);
+            return { success: true };
+        }
+
+        // Handle entry operations
+        if (intent === "addEntry") {
+            const packData = JSON.parse(formData.get("packData") as string);
+            const newEntry = {
+                id: uuidv4(),
+                performer: "",
+                canonicalName: "",
+                possibleAnswers: [],
+                ytVideoId: "",
+                songStart: 0,
+                playDuration: -1,
+            };
+
+            packData.entries.push(newEntry);
+            packData.updatedAt = new Date();
+
+            await updateQuizPack(packId, packData);
+            return {
+                success: true,
+                newEntryIndex: packData.entries.length - 1,
+            };
+        }
+
+        if (intent === "deleteEntry") {
+            const packData = JSON.parse(formData.get("packData") as string);
+            const entryIndex = parseInt(formData.get("entryIndex") as string);
+
+            packData.entries.splice(entryIndex, 1);
+            packData.updatedAt = new Date();
+
+            await updateQuizPack(packId, packData);
+            return { success: true };
+        }
+
+        return { success: false, message: "Unknown intent" };
+    } catch (error) {
+        console.error("Action error:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Action failed",
+        };
     }
 }
 
 const SQBotEditor = () => {
     // Use the loader data
-    const { quizPack: loadedQuizPack, redirectTo } = useLoaderData() as {
-        quizPack?: QuizPack;
-        redirectTo?: string;
-    };
+    const quizPack = useLoaderData() as QuizPack;
     const navigation = useNavigation();
     const navigate = useNavigate();
+    const submit = useSubmit();
+    const actionData = useActionData() as {
+        success?: boolean;
+        message?: string;
+        newEntryIndex?: number;
+    } | undefined;
 
-    // Handle redirect if needed
-    useEffect(() => {
-        if (redirectTo) {
-            window.location.href = redirectTo;
-        }
-    }, [redirectTo]);
-
-    // Initialize state with loaded data or default values
-    const [quizPack, setQuizPack] = useState<QuizPack>(
-        loadedQuizPack || {
-            id: "wumpus-touch-green-grass", // Default ID
-            name: "",
-            description: "",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            entries: [],
-            tags: [],
-            playCount: 0,
-        },
-    );
-
+    // Local state synced with loader data
+    const [localPack, setLocalPack] = useState<QuizPack>(quizPack);
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(0);
-    const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const saveButtonRef = useRef<SaveButtonRef>(null);
     const [modalOpen, setModalOpen] = useState(false);
 
+    // Update local state when loader data changes
+    useEffect(() => {
+        setLocalPack(quizPack);
+    }, [quizPack]);
+
+    // Update entry index when a new entry is added
+    useEffect(() => {
+        if (actionData?.success && actionData?.newEntryIndex !== undefined) {
+            setSelectedEntryIndex(actionData.newEntryIndex);
+        }
+    }, [actionData]);
+
     // Check if we're in a loading state
     const isLoading = navigation.state === "loading";
 
-    const currentEntry = selectedEntryIndex < quizPack.entries.length
-        ? quizPack.entries[selectedEntryIndex]
+    const currentEntry = selectedEntryIndex < localPack.entries.length
+        ? localPack.entries[selectedEntryIndex]
         : null;
 
-    const saveImmediate = async (
-        packToSave: QuizPack,
-        throwError: boolean = false,
-    ) => {
+    // Submit changes to the action handler directly without page reload
+    const saveImmediate = async (throwError: boolean = false) => {
         try {
             setIsSaving(true);
-            await updateQuizPack(packToSave.id, packToSave);
-            setError(null);
+
+            // Instead of using the form submission approach, call the API directly
+            await updateQuizPack(localPack.id, localPack);
+
+            // When submitting through the save button, show success
+            if (saveButtonRef.current) {
+                saveButtonRef.current.setSuccess();
+            }
         } catch (err) {
+            // Show error in toast and in button
             toast(
                 err instanceof Error ? err.message : "Failed to save changes",
             );
+            if (saveButtonRef.current) {
+                saveButtonRef.current.setError();
+            }
             if (throwError) {
                 throw err;
             }
@@ -214,15 +205,21 @@ const SQBotEditor = () => {
             setIsSaving(false);
         }
     };
+
     // Create a debounced save function
-    const debouncedSave = useDebounce(async (packToSave: QuizPack) => {
+    const debouncedSave = useDebounce(() => {
         if (saveButtonRef.current === null) {
-            // if we somehow don't have reference to save button,  call saveImmediate directly
-            saveImmediate(packToSave);
+            // if we somehow don't have reference to save button, call saveImmediate directly
+            saveImmediate();
             return;
         }
+
+        // Use the SaveButton's built-in save function by triggering a click on it
+        // This ensures we go through the proper UI flow
         saveButtonRef.current.startSave();
-    }, 3000); // 5 second delay
+    }, 3000); // 3 second delay
+
+    // We don't need an adapter anymore, as we've updated the Entries component
 
     // Handle form input changes
     const handleChange = (
@@ -245,21 +242,20 @@ const SQBotEditor = () => {
             { ...currentEntry },
         );
 
-        console.log("handleChange: updatedEntry:", updatedEntry);
         // Update in the entries array
-        const updatedEntries = [...quizPack.entries];
+        const updatedEntries = [...localPack.entries];
         updatedEntries[selectedEntryIndex] = updatedEntry;
 
         const updatedPack = {
-            ...quizPack,
+            ...localPack,
             entries: updatedEntries,
             updatedAt: new Date(),
         };
 
-        setQuizPack(updatedPack);
+        setLocalPack(updatedPack);
 
         // Trigger debounced save
-        debouncedSave(updatedPack);
+        debouncedSave();
     };
 
     const handleVideoIdChange = (value: string) => {
@@ -270,7 +266,6 @@ const SQBotEditor = () => {
         const shortMatch = value.match(youtubeShortRegex);
         const watchMatch = value.match(youtubeWatchRegex);
 
-        console.log(shortMatch, watchMatch);
         const match = shortMatch || watchMatch;
 
         if (match) {
@@ -308,8 +303,9 @@ const SQBotEditor = () => {
         setSelectedEntryIndex(index);
     };
 
-    // Add a new entry
+    // Add a new entry with optimistic UI update and debounced save
     const addNewEntry = () => {
+        // Create a new entry
         const newEntry: QuizEntry = {
             id: uuidv4(),
             performer: "",
@@ -320,39 +316,43 @@ const SQBotEditor = () => {
             playDuration: -1,
         };
 
+        // Update local state immediately (optimistic update)
         const updatedPack = {
-            ...quizPack,
-            entries: [...quizPack.entries, newEntry],
+            ...localPack,
+            entries: [...localPack.entries, newEntry],
             updatedAt: new Date(),
         };
 
-        setQuizPack(updatedPack);
-        setSelectedEntryIndex(quizPack.entries.length);
+        // Update local state and set the selection to the new entry
+        setLocalPack(updatedPack);
+        setSelectedEntryIndex(localPack.entries.length); // Set to the new entry's index
 
-        // Trigger debounced save
-        debouncedSave(updatedPack);
+        // Trigger the debounced save to update the server with the changes
+        debouncedSave();
     };
 
-    // Delete an entry
+    // Delete an entry with optimistic UI update and debounced save
     const deleteEntry = (index: number, e?: UIEvent) => {
         e?.stopPropagation();
 
-        const updatedEntries = quizPack.entries.filter((_, i) => i !== index);
+        // Update local state immediately (optimistic update)
+        const updatedEntries = localPack.entries.filter((_, i) => i !== index);
         const updatedPack = {
-            ...quizPack,
+            ...localPack,
             entries: updatedEntries,
             updatedAt: new Date(),
         };
 
-        setQuizPack(updatedPack);
+        setLocalPack(updatedPack);
 
+        // Update selected index if needed
         if (selectedEntryIndex >= index) {
             const newSelectedIndex = Math.max(0, selectedEntryIndex - 1);
             setSelectedEntryIndex(newSelectedIndex);
         }
 
-        // Trigger debounced save
-        debouncedSave(updatedPack);
+        // Trigger the debounced save to update the server with the changes
+        debouncedSave();
     };
 
     // Handle keyboard shortcut
@@ -408,21 +408,21 @@ const SQBotEditor = () => {
                         <div className="flex items-center gap-2">
                             <Input
                                 className="w-64 font-medium"
-                                value={quizPack.name}
+                                value={localPack.name}
                                 onChange={(e) => {
                                     const updatedPack = {
-                                        ...quizPack,
+                                        ...localPack,
                                         name: e.target.value,
                                         updatedAt: new Date(),
                                     };
-                                    setQuizPack(updatedPack);
-                                    debouncedSave(updatedPack);
+                                    setLocalPack(updatedPack);
+                                    debouncedSave();
                                 }}
                             />
                             <div className="flex items-center gap-1 px-2 text-sm text-gray-500 bg-gray-100 rounded">
                                 <span>Playlist ID:</span>
                                 <span className="font-medium">
-                                    {quizPack.id}
+                                    {localPack.id}
                                 </span>
                                 <Button
                                     variant="ghost"
@@ -430,7 +430,7 @@ const SQBotEditor = () => {
                                     className="w-6 h-6 cursor-pointer"
                                     onClick={() => {
                                         navigator.clipboard.writeText(
-                                            quizPack.id,
+                                            localPack.id,
                                         );
                                         toast("Pack ID has been copied!");
                                     }}
@@ -452,8 +452,10 @@ const SQBotEditor = () => {
                         </Button>
                         <SaveButton
                             minLoadingDuration={500}
+                            // Don't use the button's internal save function
+                            // as we handle that manually in startSave
                             onSave={async () => {
-                                await saveImmediate(quizPack, true);
+                                return saveImmediate(true);
                             }}
                             ref={saveButtonRef}
                         />
@@ -654,7 +656,7 @@ const SQBotEditor = () => {
                                             value="entries"
                                             className="text-sm"
                                         >
-                                            곡 목록 ({quizPack.entries.length})
+                                            곡 목록 ({localPack.entries.length})
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="settings"
@@ -666,8 +668,8 @@ const SQBotEditor = () => {
                                 </div>
                                 <TabsContent value="entries">
                                     <DraggableQuizEntries
-                                        quizPack={quizPack}
-                                        setQuizPack={setQuizPack}
+                                        quizPack={localPack}
+                                        setQuizPack={setLocalPack}
                                         debouncedSave={debouncedSave}
                                         selectedEntryIndex={selectedEntryIndex}
                                         selectEntry={selectEntry}
@@ -686,15 +688,15 @@ const SQBotEditor = () => {
                                         <textarea
                                             className="w-full h-24 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                             placeholder="플레이리스트의 컨셉 등"
-                                            value={quizPack.description}
+                                            value={localPack.description}
                                             onChange={(e) => {
                                                 const updatedPack = {
-                                                    ...quizPack,
+                                                    ...localPack,
                                                     description: e.target.value,
                                                     updatedAt: new Date(),
                                                 };
-                                                setQuizPack(updatedPack);
-                                                debouncedSave(updatedPack);
+                                                setLocalPack(updatedPack);
+                                                debouncedSave();
                                             }}
                                         >
                                         </textarea>

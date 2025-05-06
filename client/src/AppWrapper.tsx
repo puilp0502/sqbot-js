@@ -5,17 +5,20 @@ import {
     Outlet,
     RouterProvider,
     useLocation,
+    redirect,
 } from "react-router-dom";
 import Login from "./Login";
-import Editor, { loader as editorLoader } from "./Editor";
+import Editor, { loader as editorLoader, action as editorAction } from "./Editor";
 import { EditorErrorBoundary } from "./components/EditorErrorBoundary";
+import { checkAuthStatus, requireAuth } from "./lib/api";
+import { v4 as uuidv4 } from "uuid";
 
 // Helper component to protect routes
 const ProtectedRoute: React.FC = () => {
     const location = useLocation();
-    const token = localStorage.getItem("authToken");
+    const isAuthenticated = checkAuthStatus();
 
-    if (!token) {
+    if (!isAuthenticated) {
         // Redirect them to the /login page, but save the current location they were
         // trying to go to when they were redirected. This allows us to send them
         // along to that page after they login, which is a nicer user experience
@@ -26,61 +29,45 @@ const ProtectedRoute: React.FC = () => {
     return <Outlet />; // Render the child route (Editor)
 };
 
-// Create an auth checker function for route objects
-const checkAuth = () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) {
+// Auth loader for route objects
+const authLoader = async () => {
+    try {
+        requireAuth();
+        return null;
+    } catch (error) {
         return redirect("/login");
     }
-    return null;
-};
-
-// Redirect utility function
-const redirect = (path: string) => {
-    return {
-        status: 302,
-        headers: {
-            Location: path,
-        },
-    };
 };
 
 // Define the router with routes
 const router = createBrowserRouter([
     {
         path: "/login",
-        element: (
-            <Login
-                onLoginSuccess={() => {
-                    /* Placeholder, navigation handled by Login */
-                }}
-            />
-        ),
+        element: <Login />,
     },
     {
+        path: "/",
         element: <ProtectedRoute />,
+        loader: authLoader,
         children: [
             {
-                path: "/editor/:packId",
+                index: true,
+                loader: () => redirect("/editor/wumpus-touch-green-grass"), // Default pack ID
+            },
+            {
+                path: "editor/:packId",
                 element: <Editor />,
                 loader: editorLoader,
+                action: editorAction,
                 errorElement: <EditorErrorBoundary />,
             },
             // Add other protected routes here
         ],
     },
-    {
-        path: "/login-redirect",
-        loader: () => {
-            const token = localStorage.getItem("authToken");
-            return token ? redirect("/") : redirect("/login");
-        },
-        element: null, // The element won't render as the loader will redirect
-    },
-    // Catch-all route redirecting to the login page
+    // Catch-all route redirecting to the home page
     {
         path: "*",
-        loader: () => redirect("/login"),
+        loader: () => redirect("/"),
         element: null,
     },
 ]);

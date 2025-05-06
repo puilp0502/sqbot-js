@@ -126,7 +126,7 @@ const DraggableQuizEntries = (
         selectEntry: (index: number) => void;
         addNewEntry: () => void;
         deleteEntry: (index: number, e?: UIEvent) => void;
-        debouncedSave: (packToSave: QuizPack) => Promise<void>;
+        debouncedSave: () => void;
     },
 ) => {
     // Configure the drag sensors
@@ -163,7 +163,8 @@ const DraggableQuizEntries = (
                     ...pack,
                     entries: arrayMove(entries, oldIndex, newIndex),
                 };
-                debouncedSave(newPack);
+                // Just call debouncedSave without arguments
+                debouncedSave();
                 return newPack;
             });
         }

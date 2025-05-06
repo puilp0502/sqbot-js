@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Dialog,
     DialogContent,
@@ -11,13 +11,8 @@ import { ArrowRight, Calendar, Music, Plus, Search, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { QuizPack } from "./types";
 import { useDebounceValue } from "@/lib/hooks";
-
-interface SearchResults {
-    quizPacks: QuizPack[];
-    total: number;
-    offset: number;
-    limit: number;
-}
+import { useFetcher } from "react-router-dom";
+import { SearchResults, fetchTags, searchQuizPacks } from "./lib/api";
 
 // Format date to a more readable format
 const formatDate = (dateString: Date | string) => {
@@ -35,8 +30,6 @@ interface PlaylistListModalProps {
     onSelectPlaylist: (playlistId: string) => void;
 }
 
-const API_BASE_URL = "http://localhost:3001/api";
-
 export default function PlaylistListModal(
     { open, onOpenChange, onSelectPlaylist }: PlaylistListModalProps,
 ) {
@@ -47,85 +40,38 @@ export default function PlaylistListModal(
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
+    // Use React Router's useFetcher for data fetching
+    const tagsFetcher = useFetcher();
+    const playlistsFetcher = useFetcher();
+    
     // Use debounced value for search to reduce API calls
     const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
 
-    // Fetch all available tags
-    useEffect(() => {
-        if (!open) return; // Only fetch when modal is open
+    // Fetch data using fetchers
+    const fetchData = useCallback(async () => {
+        if (!open) return;
         
-        const fetchTags = async () => {
-            try {
-                const token = localStorage.getItem("authToken");
-                const response = await fetch(`${API_BASE_URL}/tags`, {
-                    headers: {
-                        "Authorization": token || "",
-                    },
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to fetch tags');
-                }
-                
-                const tags = await response.json();
-                setAllTags(tags.sort());
-            } catch (err) {
-                console.error('Error fetching tags:', err);
-                setError('Failed to load tags');
-            }
-        };
-
-        fetchTags();
-    }, [open]);
-
-    // Fetch playlists based on search criteria
-    useEffect(() => {
-        if (!open) return; // Only fetch when modal is open
+        setIsLoading(true);
         
-        const fetchPlaylists = async () => {
-            setIsLoading(true);
-            setError(null);
+        try {
+            // Fetch tags
+            const tags = await fetchTags();
+            setAllTags(tags.sort());
             
-            try {
-                // Build query parameters
-                const params = new URLSearchParams();
-                
-                if (debouncedSearchQuery) {
-                    params.append('q', debouncedSearchQuery);
-                }
-                
-                if (selectedTags.length > 0) {
-                    params.append('tags', selectedTags.join(','));
-                }
-                
-                // Order by newest first
-                params.append('orderBy', 'updatedAt');
-                params.append('orderDirection', 'desc');
-                
-                const token = localStorage.getItem("authToken");
-                const url = `${API_BASE_URL}/search?${params.toString()}`;
-                const response = await fetch(url, {
-                    headers: {
-                        "Authorization": token || "",
-                    },
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to fetch playlists');
-                }
-                
-                const data: SearchResults = await response.json();
-                setPlaylists(data.quizPacks);
-            } catch (err) {
-                console.error('Error fetching playlists:', err);
-                setError('Failed to load playlists');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        
-        fetchPlaylists();
-    }, [debouncedSearchQuery, selectedTags, open]);
+            // Fetch playlists
+            const searchResults = await searchQuizPacks(
+                debouncedSearchQuery, 
+                selectedTags.length > 0 ? selectedTags : undefined
+            );
+            setPlaylists(searchResults.quizPacks);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching data:', err);
+            setError('Failed to load data');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [open, debouncedSearchQuery, selectedTags]);
 
     // Toggle tag selection
     const toggleTag = (tag: string) => {
@@ -141,6 +87,13 @@ export default function PlaylistListModal(
         setSearchQuery("");
         setSelectedTags([]);
     };
+    
+    // Fetch data when modal opens or filters change
+    useEffect(() => {
+        if (open) {
+            fetchData();
+        }
+    }, [open, fetchData]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
