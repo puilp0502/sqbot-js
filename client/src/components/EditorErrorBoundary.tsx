@@ -68,17 +68,16 @@ export function EditorErrorBoundary() {
                 <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg text-center">
                     <Lock className="h-16 w-16 mx-auto mb-4 text-red-500" />
                     <h2 className="text-2xl font-bold mb-3 text-gray-800">
-                        Authentication Required
+                        로그인 필요
                     </h2>
                     <p className="text-gray-600 mb-6">
-                        You need to be logged in to access this quiz pack.
-                        Please log in and try again.
+                        이 퀴즈 팩에 접근하려면 로그인이 필요해요.
                     </p>
                     <button
                         className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                         onClick={() => navigate("/login")}
                     >
-                        Go to Login
+                        로그인 페이지로 가기
                     </button>
                 </div>
             </div>
@@ -91,7 +90,7 @@ export function EditorErrorBoundary() {
             <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg text-center">
                 <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-500" />
                 <h2 className="text-2xl font-bold mb-3 text-gray-800">
-                    Something Went Wrong
+                    뭔가 잘못됐어요
                 </h2>
                 <p className="text-gray-600 mb-6">
                     {getErrorMessage()}
@@ -101,13 +100,13 @@ export function EditorErrorBoundary() {
                         className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                         onClick={() => window.location.reload()}
                     >
-                        Try Again
+                        다시 시도하기
                     </button>
                     <button
                         className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
                         onClick={() => navigate(-1)}
                     >
-                        Go Back
+                        뒤로 가기
                     </button>
                 </div>
             </div>
