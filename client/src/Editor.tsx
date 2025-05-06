@@ -435,9 +435,11 @@ const SQBotEditor = () => {
                                     className="w-6 h-6 cursor-pointer"
                                     onClick={() => {
                                         navigator.clipboard.writeText(
-                                            localPack.id,
+                                            `!sqbot start ${localPack.id}`,
                                         );
-                                        toast("Pack ID has been copied!");
+                                        toast(
+                                            "SQBot 명령어가 복사됐습니다! \nDiscord에 입력해서 게임을 시작하세요.",
+                                        );
                                     }}
                                 >
                                     <Copy className="h-4 w-4" />

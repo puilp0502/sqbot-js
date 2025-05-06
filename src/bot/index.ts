@@ -11,11 +11,10 @@ import dotenv from "dotenv";
 import { MusicQuizSQLiteDatastore } from "../shared/database/sqlite";
 import { YtDlp } from "ytdlp-nodejs";
 import { GameState } from "./GameState";
+import { BOT_PREFIX } from "./constants";
 
 // Load environment variables
 dotenv.config();
-
-const BOT_PREFIX = "!sqbot";
 
 // Create client with proper intents
 const client = new Client({
@@ -84,13 +83,14 @@ client.on("messageCreate", async (message: Message) => {
       const pack = await datastore.getQuizPack(packName);
       if (!pack) {
         return message.reply(
-          `플레이리스트 ID "${packName}"을/를 찾을 수 없습니다. ${BOT_PREFIX} list 를 통해 사용 가능한 플레이리스트를 확인할 수 있습니다.`
+          `플레이리스트 ID "${packName}"을/를 찾을 수 없습니다. ${BOT_PREFIX} search 를 통해 사용 가능한 플레이리스트를 확인할 수 있습니다.`
         );
       }
 
       try {
         const game = new GameState(
           guildId,
+          message.author.id,
           pack,
           message.channel as TextChannel,
           ytDlp
@@ -117,6 +117,11 @@ client.on("messageCreate", async (message: Message) => {
 
     case "stop":
       if (game) {
+        if (message.author.id !== game.hostId) {
+          return message.reply(
+            "게임을 시작한 사람만 게임을 종료할 수 있습니다."
+          );
+        }
         await game.end();
         activeGames.delete(guildId);
         message.reply("게임 종료됨!");
@@ -125,6 +130,7 @@ client.on("messageCreate", async (message: Message) => {
       }
       break;
 
+    case "score":
     case "scores":
       const currentGame = activeGames.get(guildId);
       if (!currentGame || !currentGame.isGameActive()) {
@@ -148,7 +154,7 @@ client.on("messageCreate", async (message: Message) => {
       }
       break;
 
-    case "list":
+    case "search":
       const packs = await datastore.listQuizPacks();
       if (packs.length === 0) {
         return message.reply("사용 가능한 플레이리스트가 없습니다!");
@@ -162,13 +168,33 @@ client.on("messageCreate", async (message: Message) => {
       }
       break;
 
+    case "join":
+      if (game) {
+        game.addPlayer(message.author.id);
+      }
+      break;
+
+    case "leave":
+      if (game) {
+        game.removePlayer(message.author.id);
+      }
+
+    case "skip":
+      if (game) {
+        game.voteSkip(message.author.id);
+      }
+      break;
+
     case "help":
       const helpMessage = `
 **SQBot 명령어:**
 \`${BOT_PREFIX} start [플레이리스트 ID]\` - 지정된 플레이리스트를 가지고 새 게임을 시작합니다.
+\`${BOT_PREFIX} join\` - 현재 게임에 참여합니다. (게임에 참여중인 상태여야 정답을 맞출 수 있습니다.)
+\`${BOT_PREFIX} leave\` - 현재 게임에서 나옵니다.
 \`${BOT_PREFIX} stop\` - 현재 진행중인 게임을 중단합니다.
+\`${BOT_PREFIX} skip\` - 현재 노래를 건너뛰기로 투표합니다.
 \`${BOT_PREFIX} scores\` - 현재 게임의 점수판을 표시합니다.
-\`${BOT_PREFIX} list\` - 사용 가능한 플레이리스트를 표시합니다.
+\`${BOT_PREFIX} search [키워드]\` - 사용 가능한 플레이리스트를 검색합니다.
 \`${BOT_PREFIX} help\` - 이 도움말을 표시합니다.
       `;
       if (message.channel instanceof TextChannel) {

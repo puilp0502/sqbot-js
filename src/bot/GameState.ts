@@ -10,22 +10,28 @@ import { TextChannel, Message, VoiceChannel } from "discord.js";
 import { QuizPack, QuizEntry } from "../shared/types/quiz";
 import { YtDlp } from "ytdlp-nodejs";
 import { createStreamBridge } from "../utils";
+import { BOT_PREFIX, SKIP_SHORTCUT } from "./constants";
 
 export class GameState {
   private isActive: boolean = false;
   private currentRound: number = 0;
   private scores: Map<string, number> = new Map();
+  private players: Set<string> = new Set();
+  private skipVoters: Set<string> = new Set();
   private connection?: VoiceConnection;
   private player?: AudioPlayer;
   private roundTimeout?: ReturnType<typeof setTimeout>;
+  private answerDisplayed: boolean = false;
 
   constructor(
     private readonly guildId: string,
+    readonly hostId: string,
     private readonly pack: QuizPack,
     private readonly textChannel: TextChannel,
     private readonly ytDlp: YtDlp
   ) {
     this.guildId = guildId;
+    this.hostId = hostId;
     this.textChannel = textChannel;
     this.ytDlp = ytDlp;
 
@@ -34,6 +40,8 @@ export class GameState {
       ...pack,
       entries: [...pack.entries].sort(() => Math.random() - 0.5),
     };
+    this.skipVoters = new Set();
+    this.players = new Set([hostId]);
     console.log(this.pack);
   }
 
@@ -41,6 +49,16 @@ export class GameState {
   private get currentEntry(): QuizEntry | undefined {
     if (this.currentRound >= this.pack.entries.length) return undefined;
     return this.pack.entries[this.currentRound];
+  }
+
+  addPlayer(playerId: string): void {
+    this.players.add(playerId);
+    this.textChannel.send(`<@${playerId}> 님이 게임에 참여합니다!`);
+  }
+
+  removePlayer(playerId: string): void {
+    this.players.delete(playerId);
+    this.textChannel.send(`그리울 거에요, <@${playerId}> 😔`);
   }
 
   async start(voiceChannel: VoiceChannel, adapterCreator: any): Promise<void> {
@@ -52,11 +70,16 @@ export class GameState {
 **규칙:**
 - 재생되는 노래를 잘 들어주세요.
 - 채팅으로 노래 제목을 맞취주세요.
+- **\`${BOT_PREFIX} join\`으로 게임에 참여한 후 정답을 입력할 수 있습니다!**
+- \`${BOT_PREFIX} leave\`로 게임에서 나올 수 있습니다.
+- \`${BOT_PREFIX} skip\`으로 노래 건너뛰기 투표를 할 수 있습니다. (\`${SKIP_SHORTCUT.join(
+        "`, `"
+      )}\`으로도 가능)
 - 첫번째로 정답을 맞춘 사람이 점수를 획득합니다.
 - 가장 많은 점수를 획득한 플레이어가 승리합니다!`
     );
 
-    this.roundTimeout = setTimeout(() => this.playNextRound(), 5000);
+    this.roundTimeout = setTimeout(() => this.playNextRound(), 7000);
   }
 
   private async setupVoiceConnection(
@@ -83,7 +106,12 @@ export class GameState {
       await this.end();
       return;
     }
+    if (this.roundTimeout) {
+      clearTimeout(this.roundTimeout);
+    }
 
+    this.skipVoters = new Set();
+    this.answerDisplayed = false;
     await this.playCurrentEntry();
     await this.textChannel.send(
       `🎵 문제 ${this.currentRound + 1}/${this.pack.entries.length}`
@@ -145,14 +173,21 @@ export class GameState {
   }
 
   async checkAnswer(message: Message): Promise<boolean> {
-    if (!this.isActive || !this.currentEntry) return false;
+    if (
+      !this.isActive ||
+      !this.currentEntry ||
+      this.textChannel.id !== message.channel.id ||
+      !this.players.has(message.author.id)
+    )
+      return false;
 
     const answer = message.content.toLowerCase();
-    if (GameState.isCorrectAnswer(answer, this.currentEntry)) {
-      if (this.roundTimeout) {
-        clearTimeout(this.roundTimeout);
-      }
+    if (SKIP_SHORTCUT.includes(answer)) {
+      this.voteSkip(message.author.id);
+      return false;
+    }
 
+    if (GameState.isCorrectAnswer(answer, this.currentEntry)) {
       // Update score
       const currentScore = this.scores.get(message.author.id) || 0;
       this.scores.set(message.author.id, currentScore + 1);
@@ -161,9 +196,41 @@ export class GameState {
       await this.textChannel.send(
         `🎉 ${message.author}님이 정답을 맞췄습니다! 정답은 ${this.currentEntry.performer} - "${this.currentEntry.canonicalName}"였습니다!`
       );
+      this.answerDisplayed = true;
+      // Notify the players that they can skip song via voting
+      this.textChannel.send(
+        `🎵 노래를 건너뛰기로 투표할 수 있습니다. (\`${SKIP_SHORTCUT.join(
+          "`, `"
+        )}\`으로도 가능)`
+      );
 
+      return true;
+    }
+
+    return false;
+  }
+
+  // Once the majority of players vote skip, the song will be skipped
+  async voteSkip(memberId: string): Promise<boolean> {
+    if (!this.isActive || !this.currentEntry || !this.players.has(memberId))
+      return false;
+
+    if (this.skipVoters.has(memberId)) return false;
+
+    this.skipVoters.add(memberId);
+    const totalPlayers = this.players.size;
+    const halfPlayers = totalPlayers / 2;
+
+    this.textChannel.send(`건너뛰기: ${this.skipVoters.size}/${totalPlayers}`);
+
+    if (this.skipVoters.size > halfPlayers) {
+      let announceMessage = `🎵 대다수의 플레이어가 노래를 건너뛰기로 투표했습니다. 노래를 건너뜁니다!`;
+      if (!this.answerDisplayed) {
+        announceMessage += `\n정답은: ${this.currentEntry.performer} - "${this.currentEntry.canonicalName}"`;
+      }
+      this.textChannel.send(announceMessage);
       this.currentRound++;
-      this.roundTimeout = setTimeout(() => this.playNextRound(), 3000);
+      await this.playNextRound();
       return true;
     }
 
