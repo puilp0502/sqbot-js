@@ -34,6 +34,7 @@ import { Separator } from "./components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { TimeRangeInput } from "./TimeInput";
 import { SaveButton, SaveButtonRef } from "./SaveButton";
+import { useDebounce } from "@/lib/hooks";
 import {
     LoaderFunctionArgs,
     useLoaderData,
@@ -59,7 +60,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/${packId}`, {
+        const response = await fetch(`${API_BASE_URL}/pack/${packId}`, {
             headers: {
                 "Authorization": token,
             },
@@ -151,41 +152,6 @@ async function updateQuizPack(packId: string, pack: QuizPack): Promise<void> {
     }
 }
 
-// Custom debounce hook
-function useDebounce<T extends (...args: any[]) => any>(
-    callback: T,
-    delay: number,
-): T {
-    const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
-
-    const debouncedCallback = useCallback(
-        (...args: Parameters<T>) => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-
-            setTimeoutId(
-                setTimeout(() => {
-                    callback(...args);
-                    setTimeoutId(null);
-                }, delay),
-            );
-        },
-        [callback, delay],
-    ) as T;
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-        };
-    }, [timeoutId]);
-
-    return debouncedCallback;
-}
-
 const SQBotEditor = () => {
     // Use the loader data
     const { quizPack: loadedQuizPack, redirectTo } = useLoaderData() as {
@@ -211,6 +177,8 @@ const SQBotEditor = () => {
             createdAt: new Date(),
             updatedAt: new Date(),
             entries: [],
+            tags: [],
+            playCount: 0,
         },
     );
 

@@ -12,6 +12,8 @@ export interface QuizPack {
   id: string; // UUID
   name: string;
   description: string;
+  tags: string[];
+  playCount: number;
   createdAt: Date;
   updatedAt: Date;
   entries: QuizEntry[];
