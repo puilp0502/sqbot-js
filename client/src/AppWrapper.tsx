@@ -8,6 +8,7 @@ import {
     redirect,
 } from "react-router-dom";
 import Login from "./Login";
+import Home from "./Home";
 import Editor, { loader as editorLoader, action as editorAction } from "./Editor";
 import { EditorErrorBoundary } from "./components/EditorErrorBoundary";
 import { checkAuthStatus, requireAuth } from "./lib/api";
@@ -26,7 +27,7 @@ const ProtectedRoute: React.FC = () => {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    return <Outlet />; // Render the child route (Editor)
+    return <Outlet />; // Render the child routes
 };
 
 // Auth loader for route objects
@@ -52,7 +53,14 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                loader: () => redirect("/editor/wumpus-touch-green-grass"), // Default pack ID
+                element: <Home />,
+            },
+            {
+                path: "editor/new",
+                element: <Editor />,
+                loader: editorLoader,
+                action: editorAction,
+                errorElement: <EditorErrorBoundary />,
             },
             {
                 path: "editor/:packId",

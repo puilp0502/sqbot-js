@@ -37,6 +37,7 @@ import { SaveButton, SaveButtonRef } from "./SaveButton";
 import { useDebounce } from "@/lib/hooks";
 import {
     ActionFunctionArgs,
+    Link,
     LoaderFunctionArgs,
     redirect,
     useActionData,
@@ -402,9 +403,9 @@ const SQBotEditor = () => {
             {/* Header */}
             <header className="sticky top-0 z-10 bg-white border-b shadow-sm">
                 <div className="container flex items-center justify-between h-16 px-4 mx-auto">
-                    <h1 className="text-2xl font-bold text-red-500">
+                    <Link to="/" className="text-2xl font-bold text-red-500">
                         SQBot Editor
-                    </h1>
+                    </Link>
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                             <Input

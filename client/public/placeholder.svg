@@ -1,0 +1,9 @@
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="600" height="400" fill="#f0f0f0"/>
+  <text x="300" y="200" font-family="Arial" font-size="30" text-anchor="middle" fill="#999">Playlist Image</text>
+  <path d="M250,170 A70,70 0 1,1 350,170 Z" fill="none" stroke="#999" stroke-width="8"/>
+  <path d="M300,170 L300,120 M250,170 L350,170" stroke="#999" stroke-width="8" stroke-linecap="round"/>
+  <rect x="270" y="220" width="60" height="10" fill="#999" rx="5"/>
+  <rect x="240" y="240" width="120" height="10" fill="#999" rx="5"/>
+  <rect x="260" y="260" width="80" height="10" fill="#999" rx="5"/>
+</svg>
