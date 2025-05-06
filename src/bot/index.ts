@@ -15,6 +15,8 @@ import { GameState } from "./GameState";
 // Load environment variables
 dotenv.config();
 
+const BOT_PREFIX = "!sqbot";
+
 // Create client with proper intents
 const client = new Client({
   intents: [
@@ -47,9 +49,9 @@ client.once("ready", () => {
 // Handle message commands
 client.on("messageCreate", async (message: Message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith("!quiz")) return;
+  if (!message.content.startsWith(BOT_PREFIX)) return;
 
-  const args = message.content.slice(6).trim().split(/ +/);
+  const args = message.content.slice(BOT_PREFIX.length).trim().split(/ +/);
   const subcommand = args.shift()?.toLowerCase();
 
   const guildId = message.guild?.id;
@@ -82,7 +84,7 @@ client.on("messageCreate", async (message: Message) => {
       const pack = await datastore.getQuizPack(packName);
       if (!pack) {
         return message.reply(
-          `플레이리스트 ID "${packName}"을/를 찾을 수 없습니다. !quiz list 를 통해 사용 가능한 플레이리스트를 확인할 수 있습니다.`
+          `플레이리스트 ID "${packName}"을/를 찾을 수 없습니다. ${BOT_PREFIX} list 를 통해 사용 가능한 플레이리스트를 확인할 수 있습니다.`
         );
       }
 
@@ -163,11 +165,11 @@ client.on("messageCreate", async (message: Message) => {
     case "help":
       const helpMessage = `
 **SQBot 명령어:**
-\`!quiz start [플레이리스트 ID]\` - 지정된 플레이리스트를 가지고 새 게임을 시작합니다.
-\`!quiz stop\` - 현재 진행중인 게임을 중단합니다.
-\`!quiz scores\` - 현재 게임의 점수판을 표시합니다.
-\`!quiz list\` - 사용 가능한 플레이리스트를 표시합니다.
-\`!quiz help\` - 이 도움말을 표시합니다.
+\`${BOT_PREFIX} start [플레이리스트 ID]\` - 지정된 플레이리스트를 가지고 새 게임을 시작합니다.
+\`${BOT_PREFIX} stop\` - 현재 진행중인 게임을 중단합니다.
+\`${BOT_PREFIX} scores\` - 현재 게임의 점수판을 표시합니다.
+\`${BOT_PREFIX} list\` - 사용 가능한 플레이리스트를 표시합니다.
+\`${BOT_PREFIX} help\` - 이 도움말을 표시합니다.
       `;
       if (message.channel instanceof TextChannel) {
         message.channel.send(helpMessage);
@@ -176,7 +178,7 @@ client.on("messageCreate", async (message: Message) => {
 
     default:
       message.reply(
-        "잘못된 명령어입니다. `!quiz help`를 통해 사용 가능한 명령어를 확인하세요."
+        `잘못된 명령어입니다. \`${BOT_PREFIX} help\`를 통해 사용 가능한 명령어를 확인하세요.`
       );
   }
 });
