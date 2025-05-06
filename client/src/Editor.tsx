@@ -46,6 +46,7 @@ import {
     useSubmit,
 } from "react-router-dom";
 import PlaylistListModal from "./PlaylistListModal";
+import TagEditor from "./TagEditor";
 
 import { createQuizPack, fetchQuizPack, updateQuizPack } from "./lib/api";
 
@@ -679,9 +680,9 @@ const SQBotEditor = () => {
                                 </TabsContent>
                                 <TabsContent
                                     value="settings"
-                                    className="p-6 space-y-4 border-t m-0"
+                                    className="p-6 space-y-6 border-t m-0"
                                 >
-                                    <div className="flex gap-2 ">
+                                    <div className="flex flex-col gap-2">
                                         <label className="text-sm font-medium">
                                             플레이리스트 설명
                                         </label>
@@ -701,6 +702,14 @@ const SQBotEditor = () => {
                                         >
                                         </textarea>
                                     </div>
+                                    
+                                    <TagEditor 
+                                        quizPack={localPack}
+                                        onChange={(updatedPack) => {
+                                            setLocalPack(updatedPack);
+                                            debouncedSave();
+                                        }}
+                                    />
                                 </TabsContent>
                             </Tabs>
                         </CardContent>
