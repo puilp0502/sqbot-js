@@ -8,7 +8,7 @@ import {
 } from "@discordjs/voice";
 import { TextChannel, Message, VoiceChannel } from "discord.js";
 import { QuizPack, QuizEntry } from "../shared/types/quiz";
-import { YtDlp } from "ytdlp-nodejs";
+import { StreamOptions, YtDlp } from "ytdlp-nodejs";
 import { createStreamBridge } from "../utils";
 import { BOT_PREFIX, SKIP_SHORTCUT } from "./constants";
 
@@ -146,16 +146,24 @@ export class GameState {
 
   private async createAudioStream(entry: QuizEntry) {
     const sectionSpec = GameState.calculateSectionSpec(entry);
+    const ytdlpOptions: StreamOptions<
+      "videoonly" | "audioonly" | "audioandvideo"
+    > = {
+      format: "bestaudio",
+      downloadSections: sectionSpec,
+      forceKeyframesAtCuts: true,
+      postprocessorArgs: {
+        af: ["loudnorm"],
+      },
+    };
+
+    if (process.env.YTDLP_COOKIES) {
+      ytdlpOptions["cookies"] = process.env.YTDLP_COOKIES;
+    }
+
     const ytdlpStream = this.ytDlp.stream(
       `https://www.youtube.com/watch?v=${entry.ytVideoId}`,
-      {
-        format: "bestaudio",
-        downloadSections: sectionSpec,
-        forceKeyframesAtCuts: true,
-        postprocessorArgs: {
-          af: ["loudnorm"],
-        },
-      }
+      ytdlpOptions
     );
 
     const duplexStream = createStreamBridge();
