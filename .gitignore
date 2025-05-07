@@ -6,10 +6,13 @@ yarn-debug.log*
 pnpm-debug.log*
 
 # Dependency directories
-node_modules/
+**/node_modules/
 
 # Optional npm cache directory
 .npm/
+
+# Git metadata (here for .dockerignore symlink)
+.git/
 
 # Build output
 dist/

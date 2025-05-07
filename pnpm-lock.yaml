@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   ytdlp-nodejs@2.0.5:
-    hash: unl2p36aul6be5uvttmt7ajl3m
+    hash: c394557db3604bc631bf55eefbf2fa9cb036fd5b2490d6997b96488ceb591d78
     path: patches/ytdlp-nodejs@2.0.5.patch
 
 importers:
@@ -45,7 +45,7 @@ importers:
         version: 11.1.0
       ytdlp-nodejs:
         specifier: 2.0.5
-        version: 2.0.5(patch_hash=unl2p36aul6be5uvttmt7ajl3m)
+        version: 2.0.5(patch_hash=c394557db3604bc631bf55eefbf2fa9cb036fd5b2490d6997b96488ceb591d78)
     devDependencies:
       '@types/jest':
         specifier: ^29.5.14
@@ -4488,4 +4488,4 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  ytdlp-nodejs@2.0.5(patch_hash=unl2p36aul6be5uvttmt7ajl3m): {}
+  ytdlp-nodejs@2.0.5(patch_hash=c394557db3604bc631bf55eefbf2fa9cb036fd5b2490d6997b96488ceb591d78): {}

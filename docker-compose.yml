@@ -1,0 +1,58 @@
+services:
+  # API server 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sqbot-api
+    container_name: sqbot-api
+    command: node --trace-warnings dist/api/index.js
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/app/data/sqbot.sqlite3
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    networks:
+      - sqbot-network
+
+  # Discord bot service
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sqbot-bot
+    container_name: sqbot-bot
+    command: node --trace-warnings dist/bot/index.js
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/sqbot.sqlite3
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - sqbot-network
+
+  # Frontend client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - API_URL=http://localhost:3001/api
+    image: sqbot-client
+    container_name: sqbot-client
+    ports:
+      - "127.0.0.1:8088:80"
+    restart: unless-stopped
+    networks:
+      - sqbot-network
+
+networks:
+  sqbot-network:
+    driver: bridge

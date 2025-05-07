@@ -8,7 +8,8 @@ export interface SearchResults {
   limit: number;
 }
 
-const API_BASE_URL = "http://localhost:3001/api";
+// Get API URL from environment or use default for development
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
 // Base API request function
 async function apiRequest<T>(

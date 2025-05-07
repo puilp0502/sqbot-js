@@ -39,6 +39,12 @@
   "pnpm": {
     "patchedDependencies": {
       "ytdlp-nodejs@2.0.5": "patches/ytdlp-nodejs@2.0.5.patch"
-    }
+    },
+    "ignoredBuiltDependencies": [
+      "ytdlp-nodejs"
+    ],
+    "onlyBuiltDependencies": [
+      "sqlite3"
+    ]
   }
 }
