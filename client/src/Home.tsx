@@ -158,10 +158,9 @@ export default function HomePage() {
             <Button
               size="lg"
               className="text-lg py-6"
-              onClick={handleCreateNew}
-            >
+              onClick={() => window.open("https://discord.com/oauth2/authorize?client_id=981923049660117042&scope=bot&permissions=3147776", "_blank")}>
               <Plus className="w-5 h-5 mr-2" />
-              새 플레이리스트 만들기
+              Discord에 봇 추가
             </Button>
             <Button
               variant="outline"
