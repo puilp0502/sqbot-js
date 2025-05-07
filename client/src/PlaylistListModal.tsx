@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Calendar, Music, Plus, Search, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { QuizPack } from "./types";
 import { useDebounceValue } from "@/lib/hooks";
 import { useFetcher } from "react-router-dom";
-import { SearchResults, fetchTags, searchQuizPacks } from "./lib/api";
+import { SearchResults, createQuizPack, fetchTags, searchQuizPacks } from "./lib/api";
 
 // Format date to a more readable format
 const formatDate = (dateString: Date | string) => {
@@ -38,6 +39,7 @@ export default function PlaylistListModal(
     const [playlists, setPlaylists] = useState<QuizPack[]>([]);
     const [allTags, setAllTags] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     // Use React Router's useFetcher for data fetching
@@ -285,10 +287,45 @@ export default function PlaylistListModal(
                     <div className="pt-4 mt-4 border-t">
                         <Button
                             className="w-full"
-                            onClick={() => onOpenChange(false)}
+                            disabled={isCreating}
+                            onClick={async () => {
+                                try {
+                                    setIsCreating(true);
+                                    
+                                    // Create a new empty quiz pack
+                                    const newPack = await createQuizPack({
+                                        name: "New Quiz Pack",
+                                        description: "",
+                                        tags: []
+                                    });
+                                    
+                                    toast.success("Quiz pack created successfully!");
+                                    
+                                    // Close the modal
+                                    onOpenChange(false);
+                                    
+                                    // Navigate to the new quiz pack
+                                    onSelectPlaylist(newPack.id);
+                                    
+                                } catch (error) {
+                                    console.error("Error creating quiz pack:", error);
+                                    toast.error("Failed to create quiz pack");
+                                } finally {
+                                    setIsCreating(false);
+                                }
+                            }}
                         >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create New Quiz Pack
+                            {isCreating ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                                    Creating...
+                                </>
+                            ) : (
+                                <>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Create New Quiz Pack
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>

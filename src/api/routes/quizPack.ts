@@ -1,5 +1,6 @@
 import express, { Router, Request, Response, Application } from "express";
 import { QuizPack, QuizPackSearchParams, MusicQuizDatastore } from "../../shared/types/quiz";
+import { v4 as uuidv4 } from "uuid";
 
 const router = Router();
 
@@ -159,6 +160,49 @@ router.delete(
     }
   }
 );
+
+/**
+ * POST /pack
+ * Create a new quiz pack
+ */
+router.post("/pack", async (req: Request, res: Response) => {
+  try {
+    const quizPackData = req.body as Partial<QuizPack>;
+    const datastore = getDatastore(req);
+
+    // Generate a new UUID for the quiz pack
+    const newPackId = uuidv4();
+
+    // Create a new quiz pack with defaults
+    const newQuizPack: QuizPack = {
+      id: newPackId,
+      name: quizPackData.name || "New Quiz Pack",
+      description: quizPackData.description || "",
+      tags: quizPackData.tags || [],
+      playCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      entries: quizPackData.entries || []
+    };
+
+    // Add any entries if provided, ensuring each has an ID
+    if (newQuizPack.entries.length > 0) {
+      newQuizPack.entries = newQuizPack.entries.map(entry => ({
+        ...entry,
+        id: entry.id || uuidv4()
+      }));
+    }
+
+    // Save the new quiz pack
+    await datastore.updateQuizPack(newPackId, newQuizPack);
+
+    // Return the newly created quiz pack
+    res.status(201).json(newQuizPack);
+  } catch (error) {
+    console.error("Error creating quiz pack:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 /**
  * PUT /:pack_id

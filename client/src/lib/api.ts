@@ -18,15 +18,15 @@ async function apiRequest<T>(
   } = {}
 ): Promise<T> {
   const token = localStorage.getItem("authToken");
-  
+
   if (!token) {
     throw new Response("Unauthorized", { status: 401 });
   }
-  
+
   const { searchParams, ...fetchOptions } = options;
-  
+
   let url = `${API_BASE_URL}${endpoint}`;
-  
+
   if (searchParams) {
     const params = new URLSearchParams();
     Object.entries(searchParams).forEach(([key, value]) => {
@@ -37,30 +37,30 @@ async function apiRequest<T>(
       url += `?${paramString}`;
     }
   }
-  
+
   const response = await fetch(url, {
     ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      "Authorization": token,
+      Authorization: token,
       ...fetchOptions.headers,
     },
   });
-  
+
   if (response.status === 401) {
     localStorage.removeItem("authToken");
     throw new Response("Unauthorized", { status: 401 });
   }
-  
+
   if (!response.ok) {
     // Create a detailed error message that can be used in the UI
     const errorMessage = `API error (${response.status}): ${response.statusText}`;
     console.error(errorMessage);
-    
+
     // Throw a regular Error instead of a Response to avoid triggering the error boundary
     throw new Error(errorMessage);
   }
-  
+
   return response.json();
 }
 
@@ -90,12 +90,16 @@ export function deleteQuizPack(packId: string) {
 }
 
 // Search and tags API functions
-export function searchQuizPacks(query?: string, tags?: string[]) {
+export function searchQuizPacks(
+  query?: string,
+  tags?: string[],
+  orderBy: "updatedAt" | "playCount" = "updatedAt"
+) {
   return apiRequest<SearchResults>(`/search`, {
     searchParams: {
       q: query || "",
-      tags: tags?.join(',') || "",
-      orderBy: "updatedAt",
+      tags: tags?.join(",") || "",
+      orderBy: orderBy,
       orderDirection: "desc",
     },
   });

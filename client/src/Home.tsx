@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   ArrowRight,
   Calendar,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 import PlaylistListModal from "./PlaylistListModal";
 import { QuizPack } from "./types";
-import { searchQuizPacks } from "./lib/api";
+import { createQuizPack, searchQuizPacks } from "./lib/api";
 import { cn } from "./lib/utils";
 
 // Format date to a more readable format
@@ -58,12 +59,16 @@ export default function HomePage() {
         setFeaturedPlaylists(featuredResults.quizPacks.slice(0, 3));
 
         // For recent playlists, sort by updated date
-        const recentResults = await searchQuizPacks("", undefined);
+        const recentResults = await searchQuizPacks("", undefined, "updatedAt");
         setRecentPlaylists(recentResults.quizPacks.slice(0, 3));
 
         // For popular playlists, we could sort by playCount if API supports it
         // Since our mock used popularity, we'll simulate that with another search
-        const popularResults = await searchQuizPacks("", ["popular"]);
+        const popularResults = await searchQuizPacks(
+          "",
+          undefined,
+          "playCount",
+        );
         setPopularPlaylists(popularResults.quizPacks.slice(0, 3));
 
         setError(null);
@@ -84,8 +89,28 @@ export default function HomePage() {
   };
 
   // Handle creating a new playlist
-  const handleCreateNew = () => {
-    navigate("/editor/new");
+  const handleCreateNew = async () => {
+    try {
+      // Show loading toast
+      const loadingId = toast.loading("Creating new quiz pack...");
+
+      // Create a new empty quiz pack
+      const newPack = await createQuizPack({
+        name: "New Quiz Pack",
+        description: "",
+        tags: [],
+      });
+
+      // Dismiss loading toast and show success
+      toast.dismiss(loadingId);
+      toast.success("Quiz pack created successfully!");
+
+      // Navigate to the editor with the new pack ID
+      navigate(`/editor/${newPack.id}`);
+    } catch (error) {
+      console.error("Error creating quiz pack:", error);
+      toast.error("Failed to create quiz pack");
+    }
   };
 
   return (
@@ -488,10 +513,10 @@ export default function HomePage() {
                 각 문제별로 재생 구간, 정답, 복수 정답을 설정합니다. <br />
                 친구들을 괴롭히고 싶나요? 복수 정답을 하나도 추가하지 마세요!
                 <br />
-                <p className="text-sm text-gray-500 mt-1">
+                <span className="text-sm text-gray-500 mt-1">
                   거지같은 문제로 발생하는 모든 문제에 대해 SQBot은 책임지지
                   않습니다.
-                </p>
+                </span>
               </p>
             </div>
 

@@ -108,6 +108,7 @@ client.on("messageCreate", async (message: Message) => {
           message.member.voice.channel,
           message.guild!.voiceAdapterCreator
         );
+        await datastore.incrementPlayCount(pack.id);
       } catch (error) {
         console.error(error);
         message.reply("게임을 시작하는 중 오류가 발생했습니다.");
