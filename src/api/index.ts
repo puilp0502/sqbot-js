@@ -93,7 +93,9 @@ export function createApp(datastore: MusicQuizDatastore = defaultDatastore): App
   app.locals.datastore = datastore;
 
   // Middleware
-  app.use(cors());
+  app.use(cors({
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+  }));
   app.use(express.json({ limit: "10mb" }));
 
   // Use routes - Apply auth middleware ONLY to /api routes

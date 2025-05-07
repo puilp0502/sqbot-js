@@ -160,6 +160,7 @@ Customize your deployment by modifying the variables in the `.env` file:
 - `BOT_TOKEN`: Your Discord bot token (required)
 - `ADMIN_USERNAME` and `ADMIN_PASSWORD`: Credentials for accessing the API
 - `PORT`: API server port (default: 3001)
+- `CORS_HOST`: Allow CORS requests from this host. Should be the URL in which your frontend is served
 - `DB_PATH`: Database file location (default: /app/data/sqbot.sqlite3)
 
 ### Working with Containers
