@@ -26,17 +26,12 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV DB_PATH=/app/data/sqbot.sqlite3
 
-# Create a non-root user to run the application
-RUN groupadd -r sqbot && useradd -r -g sqbot -m -d /home/sqbot -s /sbin/nologin sqbot && \
-    mkdir -p /app/data && \
-    chown -R sqbot:sqbot /app
-
-USER sqbot
+RUN  mkdir -p /app/data
 
 # Install yt-dlp
 RUN pipx install yt-dlp
 # Set yt-dlp binary path as environment variable
-ENV YTDLP_PATH=/home/sqbot/.local/bin/yt-dlp
+ENV YTDLP_PATH=/root/.local/bin/yt-dlp
 
 # Create volume for data persistence
 VOLUME /app/data
