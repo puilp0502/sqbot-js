@@ -32,7 +32,7 @@ const activeGames = new Map<string, GameState>();
 // Initialize datastore
 // TODO: Use remote storage
 const datastore: MusicQuizDatastore = new MusicQuizSQLiteDatastore(
-  "./sample.sqlite3"
+  process.env.DB_PATH || "./sample.sqlite3"
 );
 
 // Initialize YTDLP provider
