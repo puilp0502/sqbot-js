@@ -47,7 +47,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE
       );
-      
+
       CREATE TABLE IF NOT EXISTS quiz_pack_tags (
         quiz_pack_id TEXT NOT NULL,
         tag_id TEXT NOT NULL,
@@ -55,10 +55,22 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         FOREIGN KEY (quiz_pack_id) REFERENCES quiz_packs(id) ON DELETE CASCADE,
         FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
       );
-      
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        discord_id TEXT NOT NULL UNIQUE,
+        username TEXT NOT NULL,
+        discriminator TEXT NOT NULL,
+        avatar TEXT,
+        email TEXT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_login DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Create index for faster tag lookups
       CREATE INDEX IF NOT EXISTS idx_quiz_pack_tags_tag_id ON quiz_pack_tags(tag_id);
       CREATE INDEX IF NOT EXISTS idx_quiz_pack_tags_quiz_pack_id ON quiz_pack_tags(quiz_pack_id);
+      CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id);
     `;
 
     return new Promise((resolve, reject) => {
@@ -541,6 +553,140 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         return "play_count";
       default:
         return jsField;
+    }
+  }
+
+  // User management methods
+  async upsertUser(user: {
+    discordId: string;
+    username: string;
+    discriminator: string;
+    avatar?: string;
+    email?: string;
+  }): Promise<string> {
+    try {
+      // Check if user exists
+      const existingUser = await new Promise<any>((resolve, reject) => {
+        this.#db.get(
+          "SELECT id FROM users WHERE discord_id = ?",
+          [user.discordId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      const now = new Date().toISOString();
+
+      if (existingUser) {
+        // Update existing user
+        await new Promise<void>((resolve, reject) => {
+          this.#db.run(
+            `UPDATE users
+             SET username = ?, discriminator = ?, avatar = ?, email = ?, last_login = ?
+             WHERE discord_id = ?`,
+            [
+              user.username,
+              user.discriminator,
+              user.avatar || null,
+              user.email || null,
+              now,
+              user.discordId,
+            ],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+        return existingUser.id;
+      } else {
+        // Create new user
+        const userId = crypto.randomUUID();
+        await new Promise<void>((resolve, reject) => {
+          this.#db.run(
+            `INSERT INTO users (id, discord_id, username, discriminator, avatar, email, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              userId,
+              user.discordId,
+              user.username,
+              user.discriminator,
+              user.avatar || null,
+              user.email || null,
+              now,
+              now,
+            ],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+        return userId;
+      }
+    } catch (error) {
+      console.error("Error upserting user:", error);
+      throw error;
+    }
+  }
+
+  async getUserByDiscordId(discordId: string): Promise<any | null> {
+    try {
+      const user = await new Promise<any>((resolve, reject) => {
+        this.#db.get(
+          "SELECT * FROM users WHERE discord_id = ?",
+          [discordId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (!user) return null;
+
+      return {
+        id: user.id,
+        discordId: user.discord_id,
+        username: user.username,
+        discriminator: user.discriminator,
+        avatar: user.avatar,
+        email: user.email,
+        createdAt: new Date(user.created_at),
+        lastLogin: new Date(user.last_login),
+      };
+    } catch (error) {
+      console.error("Error getting user by Discord ID:", error);
+      return null;
+    }
+  }
+
+  async getUserById(userId: string): Promise<any | null> {
+    try {
+      const user = await new Promise<any>((resolve, reject) => {
+        this.#db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!user) return null;
+
+      return {
+        id: user.id,
+        discordId: user.discord_id,
+        username: user.username,
+        discriminator: user.discriminator,
+        avatar: user.avatar,
+        email: user.email,
+        createdAt: new Date(user.created_at),
+        lastLogin: new Date(user.last_login),
+      };
+    } catch (error) {
+      console.error("Error getting user by ID:", error);
+      return null;
     }
   }
 

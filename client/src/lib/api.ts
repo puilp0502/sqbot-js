@@ -20,10 +20,6 @@ async function apiRequest<T>(
 ): Promise<T> {
   const token = localStorage.getItem("authToken");
 
-  if (!token) {
-    throw new Response("Unauthorized", { status: 401 });
-  }
-
   const { searchParams, ...fetchOptions } = options;
 
   let url = `${API_BASE_URL}${endpoint}`;
@@ -39,13 +35,20 @@ async function apiRequest<T>(
     }
   }
 
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...fetchOptions.headers,
+  };
+
+  // Add Authorization header only if token exists (for Basic Auth)
+  if (token) {
+    headers.Authorization = token;
+  }
+
   const response = await fetch(url, {
     ...fetchOptions,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: token,
-      ...fetchOptions.headers,
-    },
+    headers,
+    credentials: "include", // Include cookies for session-based auth
   });
 
   if (response.status === 401) {
@@ -116,7 +119,18 @@ export function checkAuthStatus() {
   return !!token;
 }
 
-export function logout() {
+export async function logout() {
+  try {
+    // Try to logout from session-based auth
+    const AUTH_API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3001") + "/auth";
+    await fetch(`${AUTH_API_BASE}/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch (error) {
+    console.error("Error logging out:", error);
+  }
+  // Always clear local storage
   localStorage.removeItem("authToken");
 }
 
@@ -124,5 +138,33 @@ export function logout() {
 export function requireAuth() {
   if (!checkAuthStatus()) {
     throw new Response("Unauthorized", { status: 401 });
+  }
+}
+
+// User info functions
+export interface User {
+  id: string;
+  discordId: string;
+  username: string;
+  discriminator: string;
+  avatar?: string;
+  email?: string;
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const AUTH_API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3001") + "/auth";
+    const response = await fetch(`${AUTH_API_BASE}/me`, {
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching current user:", error);
+    return null;
   }
 }
