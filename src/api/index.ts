@@ -1,11 +1,16 @@
 import express, { Request, Response, NextFunction, Application } from "express";
 import cors from "cors";
+import session from "express-session";
+import passport from "passport";
 import { quizPackRouter } from "./routes/quizPack";
+import { authRouter } from "./routes/auth";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { MusicQuizDatastore } from "../shared/types/quiz";
 import { datastore as defaultDatastore } from "./datastore";
+import { MusicQuizSQLiteDatastore } from "../shared/database/sqlite";
+import { configurePassport } from "./auth/passport";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -25,8 +30,14 @@ if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
 const storedUsernameBuffer = Buffer.from(ADMIN_USERNAME);
 const storedPasswordBuffer = Buffer.from(ADMIN_PASSWORD);
 
-// Basic Authentication middleware
-const basicAuth = (req: Request, res: Response, next: NextFunction) => {
+// Combined Authentication middleware (supports both Basic Auth and Session)
+const authenticate = (req: Request, res: Response, next: NextFunction) => {
+  // Check if user is authenticated via session (OAuth)
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
+  }
+
+  // Fall back to Basic Authentication
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Basic ")) {
@@ -88,19 +99,52 @@ const basicAuth = (req: Request, res: Response, next: NextFunction) => {
 export function createApp(datastore: MusicQuizDatastore = defaultDatastore): Application {
   // Create Express application
   const app = express();
-  
+
   // Store datastore in app.locals for global access
   app.locals.datastore = datastore;
+
+  // Session configuration
+  const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+
+  if (!process.env.SESSION_SECRET) {
+    console.warn("Warning: SESSION_SECRET not set. Using random secret (will invalidate sessions on restart)");
+  }
 
   // Middleware
   app.use(cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    credentials: true, // Allow cookies to be sent with requests
   }));
   app.use(express.json({ limit: "10mb" }));
 
+  // Session middleware
+  app.use(
+    session({
+      secret: SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      },
+    })
+  );
+
+  // Initialize Passport
+  if (datastore instanceof MusicQuizSQLiteDatastore) {
+    configurePassport(datastore);
+  }
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  // Auth routes (no auth middleware needed here)
+  app.use("/auth", authRouter);
+
   // Use routes - Apply auth middleware ONLY to /api routes
-  app.use("/api", basicAuth, quizPackRouter);
-  
+  app.use("/api", authenticate, quizPackRouter);
+
   return app;
 }
 
