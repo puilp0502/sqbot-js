@@ -5,9 +5,14 @@
   "scripts": {
     "build": "tsc",
     "bot": "node --trace-warnings dist/bot/index.js",
+    "bot:mysql": "DB_BACKEND=mysql DB_HOST=localhost DB_PORT=3306 DB_USER=root DB_PASSWORD=testpassword DB_NAME=sqbot_test node --trace-warnings dist/bot/index.js",
     "api": "node --trace-warnings dist/api/index.js",
+    "api:mysql": "DB_BACKEND=mysql DB_HOST=localhost DB_PORT=3306 DB_USER=root DB_PASSWORD=testpassword DB_NAME=sqbot_test node --trace-warnings dist/api/index.js",
     "dev": "tsc -w",
-    "test": "jest"
+    "test": "jest",
+    "test:mysql:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "test:mysql:down": "docker compose -f docker-compose.test.yml down",
+    "test:mysql": "DB_BACKEND=mysql DB_HOST=localhost DB_PORT=3306 DB_USER=root DB_PASSWORD=testpassword DB_NAME=sqbot_test jest --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +27,7 @@
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
+    "mysql2": "^3.18.2",
     "sqlite3": "^5.1.7",
     "uuid": "^11.1.0",
     "ytdlp-nodejs": "2.0.5"

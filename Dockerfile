@@ -24,7 +24,7 @@ RUN pnpm run build
 # Default environment variables
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV DB_PATH=/app/data/sqbot.sqlite3
+ENV DB_BACKEND=mysql
 
 RUN  mkdir -p /app/data
 

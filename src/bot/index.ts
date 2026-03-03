@@ -8,7 +8,7 @@ import {
 } from "discord.js";
 import { MusicQuizDatastore, QuizPack } from "../shared/types/quiz";
 import dotenv from "dotenv";
-import { MusicQuizSQLiteDatastore } from "../shared/database/sqlite";
+import { createDatastore } from "../api/datastore";
 import { YtDlp } from "ytdlp-nodejs";
 import { GameState } from "./GameState";
 import { BOT_PREFIX } from "./constants";
@@ -30,10 +30,7 @@ const client = new Client({
 const activeGames = new Map<string, GameState>();
 
 // Initialize datastore
-// TODO: Use remote storage
-const datastore: MusicQuizDatastore = new MusicQuizSQLiteDatastore(
-  process.env.DB_PATH || "./sample.sqlite3"
-);
+const datastore: MusicQuizDatastore = createDatastore();
 
 // Initialize YTDLP provider
 const ytDlp = new YtDlp({

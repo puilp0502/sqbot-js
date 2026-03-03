@@ -1,5 +1,23 @@
 services:
-  # API server 
+  # MySQL database
+  mysql:
+    image: mysql:8
+    container_name: sqbot-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sqbot_password}
+      MYSQL_DATABASE: ${DB_NAME:-sqbot}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - sqbot-network
+
+  # API server
   api:
     build:
       context: .
@@ -11,11 +29,17 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DB_PATH=/app/data/sqbot.sqlite3
-    volumes:
-      - ./data:/app/data
+      - DB_BACKEND=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-sqbot_password}
+      - DB_NAME=${DB_NAME:-sqbot}
     ports:
       - "127.0.0.1:3001:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - sqbot-network
@@ -31,9 +55,15 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
-      - DB_PATH=/app/data/sqbot.sqlite3
-    volumes:
-      - ./data:/app/data
+      - DB_BACKEND=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-sqbot_password}
+      - DB_NAME=${DB_NAME:-sqbot}
+    depends_on:
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - sqbot-network
@@ -52,6 +82,9 @@ services:
     restart: unless-stopped
     networks:
       - sqbot-network
+
+volumes:
+  mysql-data:
 
 networks:
   sqbot-network:
