@@ -1,5 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
 
+// Interface for a user
+interface User {
+  id: string;
+  discordId: string;
+  discordUsername: string;
+  email: string;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Interface for a single quiz entry
 interface QuizEntry {
   id: string; // UUID
@@ -18,6 +29,7 @@ interface QuizPack {
   description: string;
   tags: string[];
   playCount: number;
+  creatorId?: string;
   createdAt: Date;
   updatedAt: Date;
   entries: QuizEntry[];
@@ -60,10 +72,15 @@ interface MusicQuizDatastore {
 
   // Get all available tags in the system
   getAllTags(): Promise<string[]>;
+
+  // User management
+  getOrCreateUser(discordId: string, discordUsername: string, email: string): Promise<User>;
+  getUserById(userId: string): Promise<User | null>;
 }
 
 // Export the interfaces
 export {
+  User,
   QuizEntry,
   QuizPack,
   MusicQuizDatastore,

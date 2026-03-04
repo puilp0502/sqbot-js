@@ -1,82 +1,39 @@
 import express, { Request, Response, NextFunction, Application } from "express";
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import { quizPackRouter } from "./routes/quizPack";
+import { authRouter } from "./routes/auth";
 import path from "path";
 import dotenv from "dotenv";
-import crypto from "crypto";
 import { MusicQuizDatastore } from "../shared/types/quiz";
 import { datastore as defaultDatastore } from "./datastore";
 
 // Load environment variables from .env file
 dotenv.config();
 
-// Retrieve credentials from environment variables
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-
-if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-  console.error(
-    "Error: ADMIN_USERNAME and ADMIN_PASSWORD must be set in environment variables."
-  );
-  process.exit(1); // Exit if credentials are not set
+function getJwtSecret(): string {
+  return process.env.JWT_SECRET || "dev-secret-change-me";
 }
 
-// Convert stored credentials to buffers once
-const storedUsernameBuffer = Buffer.from(ADMIN_USERNAME);
-const storedPasswordBuffer = Buffer.from(ADMIN_PASSWORD);
-
-// Basic Authentication middleware
-const basicAuth = (req: Request, res: Response, next: NextFunction) => {
+// JWT Authentication middleware — verifies token and attaches user info (no role check)
+const jwtAuth = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="Restricted Area"');
-    res.status(401).send("Authentication required.");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Authentication required" });
     return;
   }
 
-  const credentialsBase64 = authHeader.split(" ")[1];
-  let credentials;
+  const token = authHeader.split(" ")[1];
+
   try {
-    credentials = Buffer.from(credentialsBase64, "base64").toString("utf-8");
-  } catch (e) {
-    // Handle potential errors during base64 decoding
-    res.setHeader("WWW-Authenticate", 'Basic realm="Restricted Area"');
-    res.status(400).send("Invalid base64 encoding in authorization header.");
-    return;
-  }
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; role: string };
 
-  const [username, password] = credentials.split(":");
-
-  if (!username || password === undefined) {
-    // Handle case where decoding or splitting fails or password is empty
-    res.setHeader("WWW-Authenticate", 'Basic realm="Restricted Area"');
-    res.status(401).send("Invalid authentication format.");
-    return;
-  }
-
-  const providedUsernameBuffer = Buffer.from(username);
-  const providedPasswordBuffer = Buffer.from(password);
-
-  // Constant-time comparison
-  // 1. Check length equality first (itself a constant-time operation for buffers)
-  // 2. Use crypto.timingSafeEqual for the actual comparison
-  // Ensure buffers have the same length before timingSafeEqual to prevent errors
-  const isUsernameMatch =
-    storedUsernameBuffer.length === providedUsernameBuffer.length &&
-    crypto.timingSafeEqual(storedUsernameBuffer, providedUsernameBuffer);
-
-  const isPasswordMatch =
-    storedPasswordBuffer.length === providedPasswordBuffer.length &&
-    crypto.timingSafeEqual(storedPasswordBuffer, providedPasswordBuffer);
-
-  if (isUsernameMatch && isPasswordMatch) {
-    // Authentication successful
+    // Attach user info to request
+    (req as any).user = decoded;
     next();
-  } else {
-    // Authentication failed
-    res.setHeader("WWW-Authenticate", 'Basic realm="Restricted Area"');
-    res.status(401).send("Invalid credentials.");
+  } catch (error) {
+    res.status(401).json({ error: "Invalid token" });
     return;
   }
 };
@@ -88,7 +45,7 @@ const basicAuth = (req: Request, res: Response, next: NextFunction) => {
 export function createApp(datastore: MusicQuizDatastore = defaultDatastore): Application {
   // Create Express application
   const app = express();
-  
+
   // Store datastore in app.locals for global access
   app.locals.datastore = datastore;
 
@@ -98,9 +55,12 @@ export function createApp(datastore: MusicQuizDatastore = defaultDatastore): App
   }));
   app.use(express.json({ limit: "10mb" }));
 
-  // Use routes - Apply auth middleware ONLY to /api routes
-  app.use("/api", basicAuth, quizPackRouter);
-  
+  // Auth routes — no auth required
+  app.use("/auth", authRouter);
+
+  // API routes — JWT required (any authenticated user)
+  app.use("/api", jwtAuth, quizPackRouter);
+
   return app;
 }
 

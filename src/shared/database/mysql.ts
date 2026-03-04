@@ -1,5 +1,6 @@
 import mysql, { Pool, PoolOptions, RowDataPacket } from "mysql2/promise";
 import {
+  User,
   QuizEntry,
   QuizPack,
   MusicQuizDatastore,
@@ -26,6 +27,7 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
           name VARCHAR(255) NOT NULL,
           description TEXT,
           play_count INTEGER NOT NULL DEFAULT 0,
+          creator_id VARCHAR(255),
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -70,6 +72,18 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
       await conn.query(`
         CREATE INDEX idx_quiz_pack_tags_quiz_pack_id ON quiz_pack_tags(quiz_pack_id)
       `).catch(() => {}); // Ignore if already exists
+
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(255) PRIMARY KEY,
+          discord_id VARCHAR(255) NOT NULL UNIQUE,
+          discord_username VARCHAR(255) NOT NULL,
+          email VARCHAR(255),
+          role VARCHAR(50) NOT NULL DEFAULT 'user',
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
     } finally {
       conn.release();
     }
@@ -108,6 +122,7 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
         name: quizPack.name,
         description: quizPack.description,
         playCount: quizPack.play_count || 0,
+        creatorId: quizPack.creator_id || undefined,
         createdAt: new Date(quizPack.created_at),
         updatedAt: new Date(quizPack.updated_at),
         tags: tagRows.map((row) => row.name),
@@ -152,6 +167,7 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
           name: pack.name,
           description: pack.description,
           playCount: pack.play_count || 0,
+          creatorId: pack.creator_id || undefined,
           createdAt: new Date(pack.created_at),
           updatedAt: new Date(pack.updated_at),
           tags: tagsByPackId[pack.id] || [],
@@ -267,6 +283,7 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
           description: pack.description,
           tags: tagRows.map((row: any) => row.name),
           playCount: pack.play_count || 0,
+          creatorId: pack.creator_id || undefined,
           createdAt: new Date(pack.created_at),
           updatedAt: new Date(pack.updated_at),
           entries: entries.map(this.#rowToQuizEntry),
@@ -326,10 +343,10 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
     try {
       await conn.beginTransaction();
 
-      // Upsert the quiz pack
+      // Upsert the quiz pack — preserve existing creator_id on UPDATE
       await conn.query(
-        `INSERT INTO quiz_packs (id, name, description, play_count, updated_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO quiz_packs (id, name, description, play_count, creator_id, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            name = VALUES(name),
            description = VALUES(description),
@@ -340,6 +357,7 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
           quizPack.name,
           quizPack.description,
           quizPack.playCount,
+          quizPack.creatorId || null,
           this.#formatDateForMySQL(new Date()),
         ]
       );
@@ -413,6 +431,59 @@ export class MusicQuizMySQLDatastore implements MusicQuizDatastore {
       conn.release();
     }
     return;
+  }
+
+  async getOrCreateUser(discordId: string, discordUsername: string, email: string): Promise<User> {
+    await this.#ready();
+    const now = this.#formatDateForMySQL(new Date());
+    const id = crypto.randomUUID();
+
+    await this.#pool.query(
+      `INSERT INTO users (id, discord_id, discord_username, email, role, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'user', ?, ?)
+       ON DUPLICATE KEY UPDATE
+         discord_username = VALUES(discord_username),
+         email = VALUES(email),
+         updated_at = VALUES(updated_at)`,
+      [id, discordId, discordUsername, email, now, now]
+    );
+
+    const [rows] = await this.#pool.query<RowDataPacket[]>(
+      "SELECT * FROM users WHERE discord_id = ?",
+      [discordId]
+    );
+
+    const row = rows[0];
+    return {
+      id: row.id,
+      discordId: row.discord_id,
+      discordUsername: row.discord_username,
+      email: row.email,
+      role: row.role,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  async getUserById(userId: string): Promise<User | null> {
+    await this.#ready();
+    const [rows] = await this.#pool.query<RowDataPacket[]>(
+      "SELECT * FROM users WHERE id = ?",
+      [userId]
+    );
+
+    if (rows.length === 0) return null;
+
+    const row = rows[0];
+    return {
+      id: row.id,
+      discordId: row.discord_id,
+      discordUsername: row.discord_username,
+      email: row.email,
+      role: row.role,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
   }
 
   #formatDateForMySQL(date: Date): string {

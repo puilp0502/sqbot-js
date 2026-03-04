@@ -1,5 +1,6 @@
 import { Database } from "sqlite3";
 import {
+  User,
   QuizEntry,
   QuizPack,
   MusicQuizDatastore,
@@ -27,6 +28,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         name TEXT NOT NULL,
         description TEXT,
         play_count INTEGER NOT NULL DEFAULT 0,
+        creator_id TEXT,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -59,6 +61,16 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
       -- Create index for faster tag lookups
       CREATE INDEX IF NOT EXISTS idx_quiz_pack_tags_tag_id ON quiz_pack_tags(tag_id);
       CREATE INDEX IF NOT EXISTS idx_quiz_pack_tags_quiz_pack_id ON quiz_pack_tags(quiz_pack_id);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        discord_id TEXT NOT NULL UNIQUE,
+        discord_username TEXT NOT NULL,
+        email TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
     `;
 
     return new Promise((resolve, reject) => {
@@ -109,6 +121,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         name: quizPack.name,
         description: quizPack.description,
         playCount: quizPack.play_count || 0,
+        creatorId: quizPack.creator_id || undefined,
         createdAt: new Date(quizPack.created_at),
         updatedAt: new Date(quizPack.updated_at),
         tags: tags,
@@ -171,6 +184,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
           name: pack.name,
           description: pack.description,
           playCount: pack.play_count || 0,
+          creatorId: pack.creator_id || undefined,
           createdAt: new Date(pack.created_at),
           updatedAt: new Date(pack.updated_at),
           tags: tagsByPackId[pack.id] || [],
@@ -313,6 +327,7 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
           description: pack.description,
           tags,
           playCount: pack.play_count || 0,
+          creatorId: pack.creator_id || undefined,
           createdAt: new Date(pack.created_at),
           updatedAt: new Date(pack.updated_at),
           entries: entries.map(this.#rowToQuizEntry),
@@ -387,15 +402,26 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
         });
       });
 
+      // Check if the pack already exists
+      const existingPack = await new Promise<any>((resolve, reject) => {
+        this.#db.get("SELECT id, creator_id FROM quiz_packs WHERE id = ?", [quizPackId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
       // Update the quiz pack basic info
+      // Preserve existing creator_id on UPDATE, use provided creatorId on INSERT
+      const creatorId = existingPack ? existingPack.creator_id : (quizPack.creatorId || null);
       await new Promise<void>((resolve, reject) => {
         this.#db.run(
-          "INSERT OR REPLACE INTO quiz_packs (id, name, description, play_count, updated_at) VALUES (?, ?, ?, ?, ?)",
+          "INSERT OR REPLACE INTO quiz_packs (id, name, description, play_count, creator_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
           [
             quizPackId,
             quizPack.name,
             quizPack.description,
             quizPack.playCount,
+            creatorId,
             new Date().toISOString(),
           ],
           (err) => {
@@ -517,6 +543,85 @@ export class MusicQuizSQLiteDatastore implements MusicQuizDatastore {
       console.error("Error updating quiz pack:", error);
     }
     return;
+  }
+
+  async getOrCreateUser(discordId: string, discordUsername: string, email: string): Promise<User> {
+    const existingUser = await new Promise<any>((resolve, reject) => {
+      this.#db.get("SELECT * FROM users WHERE discord_id = ?", [discordId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (existingUser) {
+      // Update username and email on each login
+      const now = new Date().toISOString();
+      await new Promise<void>((resolve, reject) => {
+        this.#db.run(
+          "UPDATE users SET discord_username = ?, email = ?, updated_at = ? WHERE id = ?",
+          [discordUsername, email, now, existingUser.id],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      return {
+        id: existingUser.id,
+        discordId: existingUser.discord_id,
+        discordUsername: discordUsername,
+        email: email,
+        role: existingUser.role,
+        createdAt: new Date(existingUser.created_at),
+        updatedAt: new Date(now),
+      };
+    }
+
+    // Create new user
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await new Promise<void>((resolve, reject) => {
+      this.#db.run(
+        "INSERT INTO users (id, discord_id, discord_username, email, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?)",
+        [id, discordId, discordUsername, email, now, now],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    return {
+      id,
+      discordId,
+      discordUsername,
+      email,
+      role: "user",
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
+    };
+  }
+
+  async getUserById(userId: string): Promise<User | null> {
+    const row = await new Promise<any>((resolve, reject) => {
+      this.#db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      discordId: row.discord_id,
+      discordUsername: row.discord_username,
+      email: row.email,
+      role: row.role,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
   }
 
   #rowToQuizEntry(row: any): QuizEntry {

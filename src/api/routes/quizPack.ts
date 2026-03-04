@@ -11,6 +11,21 @@ function getDatastore(req: Request): MusicQuizDatastore {
   return req.app.locals.datastore as MusicQuizDatastore;
 }
 
+/**
+ * Get the authenticated user from the request (set by jwtAuth middleware)
+ */
+function getUser(req: Request): { userId: string; role: string } {
+  return (req as any).user;
+}
+
+/**
+ * Check if the current user owns the given quiz pack or is an admin
+ */
+function canModifyPack(req: Request, pack: QuizPack): boolean {
+  const user = getUser(req);
+  return user.role === "admin" || pack.creatorId === user.userId;
+}
+
 interface PackParams {
   pack_id: string;
 }
@@ -115,6 +130,12 @@ router.post("/pack/:pack_id/tags", async (req: Request, res: Response) => {
       return;
     }
 
+    // Check ownership
+    if (!canModifyPack(req, quizPack)) {
+      res.status(403).json({ error: "You do not have permission to modify this quiz pack" });
+      return;
+    }
+
     // Add the new tags to the existing ones, removing duplicates
     const uniqueTags = Array.from(new Set([...quizPack.tags, ...tags]));
     quizPack.tags = uniqueTags;
@@ -147,6 +168,12 @@ router.delete(
         return;
       }
 
+      // Check ownership
+      if (!canModifyPack(req, quizPack)) {
+        res.status(403).json({ error: "You do not have permission to modify this quiz pack" });
+        return;
+      }
+
       // Remove the tag
       quizPack.tags = quizPack.tags.filter((tag) => tag !== tag_name);
 
@@ -174,12 +201,14 @@ router.post("/pack", async (req: Request, res: Response) => {
     const newPackId = uuidv4();
 
     // Create a new quiz pack with defaults
+    const user = getUser(req);
     const newQuizPack: QuizPack = {
       id: newPackId,
       name: quizPackData.name || "New Quiz Pack",
       description: quizPackData.description || "",
       tags: quizPackData.tags || [],
       playCount: 0,
+      creatorId: user.userId,
       createdAt: new Date(),
       updatedAt: new Date(),
       entries: quizPackData.entries || []
@@ -218,6 +247,12 @@ router.put("/pack/:pack_id", async (req: Request, res: Response) => {
     const existingPack = await datastore.getQuizPack(pack_id);
     if (!existingPack) {
       res.status(404).json({ error: "Quiz pack not found" });
+      return;
+    }
+
+    // Check ownership
+    if (!canModifyPack(req, existingPack)) {
+      res.status(403).json({ error: "You do not have permission to modify this quiz pack" });
       return;
     }
 

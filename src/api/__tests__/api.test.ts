@@ -1,4 +1,5 @@
 import request, { SuperTest, Test } from "supertest";
+import jwt from "jsonwebtoken";
 import { createApp } from "../index";
 import { v4 as uuidv4 } from "uuid";
 import { QuizPack, MusicQuizDatastore } from "../../shared/types/quiz";
@@ -7,6 +8,8 @@ import { Application } from "express";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 // Sample data for testing
 const createSampleQuizPack = (id: string, options = {}): QuizPack => ({
@@ -38,6 +41,8 @@ type TestEnvironment = {
   authRequest: (method: string, url: string) => request.Test;
 };
 
+const TEST_ADMIN_USER_ID = "test-admin-id";
+
 /**
  * Create a test environment with isolated datastore and app
  */
@@ -53,15 +58,17 @@ function createTestEnvironment(): TestEnvironment {
     id: string = uuidv4(),
     options = {}
   ): Promise<QuizPack> => {
-    const quizPack = createSampleQuizPack(id, options);
+    const quizPack = createSampleQuizPack(id, { creatorId: TEST_ADMIN_USER_ID, ...options });
     await datastore.updateQuizPack(id, quizPack);
     return quizPack;
   };
 
-  // Basic auth credentials for tests
-  const AUTH_CREDENTIALS = Buffer.from(
-    `${process.env.ADMIN_USERNAME}:${process.env.ADMIN_PASSWORD}`
-  ).toString("base64");
+  // Generate a JWT token for an admin user
+  const adminToken = jwt.sign(
+    { userId: TEST_ADMIN_USER_ID, role: "admin" },
+    JWT_SECRET,
+    { expiresIn: "1h" }
+  );
 
   // Helper to create an authenticated request
   const authRequest = (method: string, url: string) => {
@@ -69,17 +76,17 @@ function createTestEnvironment(): TestEnvironment {
 
     switch (method.toLowerCase()) {
       case "get":
-        return req.get(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+        return req.get(url).set("Authorization", `Bearer ${adminToken}`);
       case "post":
-        return req.post(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+        return req.post(url).set("Authorization", `Bearer ${adminToken}`);
       case "put":
-        return req.put(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+        return req.put(url).set("Authorization", `Bearer ${adminToken}`);
       case "delete":
         return req
           .delete(url)
-          .set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+          .set("Authorization", `Bearer ${adminToken}`);
       case "patch":
-        return req.patch(url).set("Authorization", `Basic ${AUTH_CREDENTIALS}`);
+        return req.patch(url).set("Authorization", `Bearer ${adminToken}`);
       default:
         throw new Error(`Unsupported HTTP method: ${method}`);
     }
@@ -397,6 +404,71 @@ describe("Quiz Pack API", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.quizPacks).toHaveLength(1);
+    });
+  });
+
+  describe("Ownership", () => {
+    it("should return 403 when a different user tries to PUT a pack they don't own", async () => {
+      const { app, createTestQuizPack } = createTestEnvironment();
+
+      // Create a pack owned by the admin
+      const quizPack = await createTestQuizPack("owned-pack");
+
+      // Generate a token for a different non-admin user
+      const otherToken = jwt.sign(
+        { userId: "other-user-id", role: "user" },
+        JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      const response = await request(app)
+        .put(`/api/pack/${quizPack.id}`)
+        .set("Authorization", `Bearer ${otherToken}`)
+        .send(quizPack);
+
+      expect(response.status).toBe(403);
+      expect(response.body).toHaveProperty("error", "You do not have permission to modify this quiz pack");
+    });
+
+    it("should allow the owner to update their own pack", async () => {
+      const { app, datastore } = createTestEnvironment();
+
+      const ownerId = "owner-user-id";
+      const pack = createSampleQuizPack("owner-test-pack", { creatorId: ownerId });
+      await datastore.updateQuizPack(pack.id, pack);
+
+      const ownerToken = jwt.sign(
+        { userId: ownerId, role: "user" },
+        JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      const response = await request(app)
+        .put(`/api/pack/${pack.id}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send(pack);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("success", true);
+    });
+
+    it("POST /pack should set creatorId from authenticated user", async () => {
+      const { app } = createTestEnvironment();
+
+      const userId = "creator-user-id";
+      const token = jwt.sign(
+        { userId, role: "user" },
+        JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      const response = await request(app)
+        .post("/api/pack")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "My New Pack", description: "Test" });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty("creatorId", userId);
     });
   });
 });
