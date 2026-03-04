@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
     createBrowserRouter,
     Navigate,
     Outlet,
     RouterProvider,
     useLocation,
+    useNavigate,
+    useSearchParams,
     redirect,
 } from "react-router-dom";
 import Login from "./Login";
@@ -20,14 +22,10 @@ const ProtectedRoute: React.FC = () => {
     const isAuthenticated = checkAuthStatus();
 
     if (!isAuthenticated) {
-        // Redirect them to the /login page, but save the current location they were
-        // trying to go to when they were redirected. This allows us to send them
-        // along to that page after they login, which is a nicer user experience
-        // than dropping them off on the home page.
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    return <Outlet />; // Render the child routes
+    return <Outlet />;
 };
 
 // Auth loader for route objects
@@ -40,11 +38,33 @@ const authLoader = async () => {
     }
 };
 
+// Component to handle the OAuth callback
+function LoginCallback() {
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const token = searchParams.get("token");
+        if (token) {
+            localStorage.setItem("authToken", `Bearer ${token}`);
+            navigate("/", { replace: true });
+        } else {
+            navigate("/login", { replace: true });
+        }
+    }, [searchParams, navigate]);
+
+    return null;
+}
+
 // Define the router with routes
 const router = createBrowserRouter([
     {
         path: "/login",
         element: <Login />,
+    },
+    {
+        path: "/login/callback",
+        element: <LoginCallback />,
     },
     {
         path: "/",
@@ -69,7 +89,6 @@ const router = createBrowserRouter([
                 action: editorAction,
                 errorElement: <EditorErrorBoundary />,
             },
-            // Add other protected routes here
         ],
     },
     // Catch-all route redirecting to the home page
@@ -81,12 +100,6 @@ const router = createBrowserRouter([
 ]);
 
 function AppWrapper() {
-    // Function to handle logout (optional, but good practice)
-    const handleLogout = () => {
-        localStorage.removeItem("authToken");
-        window.location.reload(); // Simple way to force re-check
-    };
-
     return <RouterProvider router={router} />;
 }
 

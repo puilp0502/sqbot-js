@@ -54,11 +54,8 @@ async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    // Create a detailed error message that can be used in the UI
     const errorMessage = `API error (${response.status}): ${response.statusText}`;
     console.error(errorMessage);
-
-    // Throw a regular Error instead of a Response to avoid triggering the error boundary
     throw new Error(errorMessage);
   }
 
@@ -113,7 +110,7 @@ export function fetchTags() {
 // Authentication functions
 export function checkAuthStatus() {
   const token = localStorage.getItem("authToken");
-  return !!token;
+  return !!token && token.startsWith("Bearer ");
 }
 
 export function logout() {

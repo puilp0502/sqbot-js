@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useMemo } from "react";
 import {
     Card,
     CardContent,
@@ -8,20 +7,13 @@ import {
     CardHeader,
     CardTitle,
 } from "./components/ui/card";
-import { Input } from "./components/ui/input";
 import { Button } from "./components/ui/button";
-import { Label } from "./components/ui/label";
 
 interface LoginProps {
     onLoginSuccess?: () => void;
 }
 
 function Login({ onLoginSuccess }: LoginProps) {
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
-    const navigate = useNavigate();
-
     // Generate animation elements only once using useMemo
     const pulseElements = useMemo(
         () =>
@@ -51,32 +43,11 @@ function Login({ onLoginSuccess }: LoginProps) {
         [],
     );
 
-    const handleLogin = (event: React.FormEvent) => {
-        event.preventDefault();
-        setError(""); // Clear previous errors
-
-        if (!username || !password) {
-            setError("Username and password are required.");
-            return;
-        }
-
-        // Basic Authentication doesn't really "log in" to the backend in a session-based way.
-        // We just store the credentials locally to be sent with future API requests.
-        // Here, we'll store the Base64 encoded "token".
-        const credentials = `${username}:${password}`;
-        const encodedCredentials = btoa(credentials); // Base64 encode
-        const basicAuthToken = `Basic ${encodedCredentials}`;
-
-        // Store the token in local storage (or session storage)
-        localStorage.setItem("authToken", basicAuthToken);
-
-        console.log("Credentials stored locally.");
-        // Call onLoginSuccess if provided
-        if (onLoginSuccess) {
-            onLoginSuccess();
-        }
-        // Use React Router's navigate for redirection
-        navigate("/"); // Redirect to the home page (which will redirect to editor)
+    const handleDiscordLogin = () => {
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
+        // Strip /api suffix to get the server base URL
+        const serverBaseUrl = apiBaseUrl.replace(/\/api$/, "");
+        window.location.href = `${serverBaseUrl}/auth/discord`;
     };
 
     return (
@@ -133,57 +104,20 @@ function Login({ onLoginSuccess }: LoginProps) {
                         SQBot: Discord Song Quiz Bot
                     </CardDescription>
                 </CardHeader>
-                <form onSubmit={handleLogin} className="space-y-6 pt-4">
-                    <CardContent className="space-y-6 pt-4">
-                        <div className="space-y-3">
-                            <Label
-                                htmlFor="username"
-                                className="text-sm font-medium"
-                            >
-                                Username
-                            </Label>
-                            <Input
-                                id="username"
-                                type="text"
-                                placeholder="아이디"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                required
-                                className="w-full h-11"
-                            />
-                        </div>
-                        <div className="space-y-3">
-                            <Label
-                                htmlFor="password"
-                                className="text-sm font-medium"
-                            >
-                                Password
-                            </Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                placeholder="비밀번호"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                className="w-full h-11"
-                            />
-                        </div>
-                        {error && (
-                            <p className="text-sm text-red-500 text-center font-medium">
-                                {error}
-                            </p>
-                        )}
-                    </CardContent>
+                <CardContent className="pt-4">
                     <CardFooter className="pt-2 pb-6">
                         <Button
-                            type="submit"
-                            className="w-full h-11 bg-black hover:bg-gray-800 transition-all duration-300"
+                            type="button"
+                            onClick={handleDiscordLogin}
+                            className="w-full h-11 bg-[#5865F2] hover:bg-[#4752C4] transition-all duration-300 text-white"
                         >
-                            Sign in
+                            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                            </svg>
+                            Login with Discord
                         </Button>
                     </CardFooter>
-                </form>
+                </CardContent>
             </Card>
         </div>
     );

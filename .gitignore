@@ -40,3 +40,7 @@ coverage/
 Thumbs.db
 
 cookies.txt
+
+# Local database files
+data/
+sqbot.sqlite3
